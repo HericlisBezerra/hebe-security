@@ -5,7 +5,6 @@ license: MIT
 metadata:
   author: HeBeDigital (@hericlisbezerra)
   version: "2.0"
-  derived-from: "vibe-security by Chris Raroque / Aloa (MIT) — see ATTRIBUTION.md"
 ---
 
 # Security Scan — Red Team Review

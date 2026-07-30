@@ -102,12 +102,6 @@ hebe-security-scan/
 
 Each reference loads only when the audit reaches that category — the whole skill never sits in context at once.
 
-## Credits
-
-Built by **HeBeDigital** ([@hericlisbezerra](https://github.com/HericlisBezerra)).
-
-Incorporates material from [**vibe-security**](https://github.com/raroque/vibe-security-skill) by Chris Raroque / Aloa (MIT) — see [ATTRIBUTION.md](hebe-security-scan/ATTRIBUTION.md). The merge is documented check-by-check in [SPECS.md](SPECS.md).
-
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Built by **HeBeDigital** ([@hericlisbezerra](https://github.com/HericlisBezerra)).
