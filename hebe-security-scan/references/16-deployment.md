@@ -91,6 +91,6 @@ Run before every production deploy:
 - Verify `.env` files are listed in `.gitignore`.
 - Confirm debug mode / verbose logging is disabled for the production build/environment.
 - Check that error pages don't leak stack traces.
-- Verify CORS is configured to allow only your own domains, not `*`.
-- Verify source maps are not deployed to production.
+- Verify CORS uses exact, approved origins for the installation and any tenant custom domains; never reflect arbitrary `Origin` or combine `*` with credentials.
+- Verify source maps are not served publicly; private upload to an error-tracking service is compatible with this check.
 - Verify `/.git/` (and other dotfiles) return 404 on the live site.

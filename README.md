@@ -2,7 +2,7 @@
 
 **An offensive security audit skill for AI coding assistants.**
 
-AI assistants ship features fast and get security wrong in predictable ways. This skill audits your codebase the way an attacker would — it detects your real stack first, then works through 17 categories with ~104 concrete checks, and demands a reproducible exploit for every finding instead of a vague warning.
+AI assistants ship features fast and get security wrong in predictable ways. This skill audits your codebase the way an attacker would — it detects your real stack first, then works through 18 categories with ~110 concrete checks, and demands a reproducible exploit for every finding instead of a vague warning.
 
 Works with **Claude Code** and any assistant that supports agent skills.
 
@@ -45,25 +45,27 @@ It also runs **proactively**: when you ask it to *write* code touching auth, pay
 | **0 · Scope** | What's in scope, can the app be run, production or dev, report-only or report + fix |
 | **1 · Recon** | Detects the real stack: language, framework, database, auth, ORM, deploy target, AI usage |
 | **2 · Surface** | Maps every route, hidden public endpoint, table, trust boundary and money/permission flow |
-| **3 · Audit** | Walks all 17 categories, loading only the references your stack actually needs |
+| **3 · Audit** | Walks all 18 categories, loading only the references your stack actually needs |
 | **4 · Report** | Critical → High → Medium → Low, each with attack, impact, reproduction and a before/after fix |
 | **5 · Fix** | Only if asked. Never "fixes" by weakening a check. Adds a regression test per fix |
 
-## The 17 categories
+## The 18 categories
 
-| # | Category | # | Category |
-|---|---|---|---|
-| 1 | Secrets & environment variables | 10 | Business logic |
-| 2 | Access control / IDOR | 11 | Rate limiting & abuse |
-| 3 | Database rules — Supabase RLS · Firebase · Convex | 12 | Payments |
-| 4 | Authentication & session | 13 | AI / LLM integration |
-| 5 | Hidden public endpoints | 14 | Mobile (React Native / Expo) |
-| 6 | Race conditions | 15 | Config, headers & CORS |
-| 7 | Input validation | 16 | Deployment & environments |
-| 8 | Injection — SQL, XSS, SSRF, command, template, ORM | 17 | Dependencies |
-| 9 | Mass assignment | | |
+Grouped into five blocks. **The grouping is the reading order; the number is a stable ID** — a category added later keeps the ID it was born with instead of renumbering everything after it.
+
+| Block | Categories |
+|---|---|
+| **A · Exposure and access** | 1 Secrets & env · 2 Access control / IDOR · 3 Database rules (RLS, Firebase, Convex) · 18 Sensitive data at rest · 4 Authentication & session · 5 Hidden public endpoints |
+| **B · Logic flaws** | 6 Race conditions · 7 Input validation · 8 Injection · 9 Mass assignment · 10 Business logic |
+| **C · Abuse and economics** | 11 Rate limiting, bot abuse & billing · 12 Payments · 13 AI / LLM integration |
+| **D · Platform** | 14 Mobile (React Native / Expo) |
+| **E · Infra and supply chain** | 15 Config, headers & CORS · 16 Deployment & environments · 17 Dependencies |
 
 Plus: stack adapters for 11 stacks, regression tests, a pre-deploy checklist, OWASP Top 10 (2021) mapping, and secure prompt templates.
+
+Each run picks the smallest useful review mode — **Change** (a diff or PR), **Release** (what is about to ship) or **Baseline** (the whole project) — and states what it did not cover.
+
+The audit runs white-box against the repository by default. A **runtime mode** audits the deployed app black-box — headers the build stripped, TLS, CORS rewritten by a proxy, throttling that never fires at the edge, endpoints that are live but absent from the repo. Block E is where it pays off most.
 
 ## The one rule that catches the most bugs
 

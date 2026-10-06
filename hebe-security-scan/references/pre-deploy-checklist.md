@@ -1,10 +1,10 @@
 # Pre-Deploy Security Checklist
 
-Paste this into the project's `README.md` or `SECURITY.md`. Run through every box before shipping to production.
+Adapt this checklist to the installation and to the risk of the change; do not paste it into the project wholesale. Mark items that do not apply and record what was not tested.
 
 ## Secrets
 
-- [ ] `.env` files are listed in `.gitignore`
+- [ ] `.env` and other credential exports are ignored at any depth; also check files **already tracked** and the staged diff
 - [ ] No secret is grep-able in the source (`gitleaks detect`)
 - [ ] `gitleaks detect` has been run against the full repo, including git history, not just the working tree
 - [ ] `.env.example` is committed with variable **names** only, no real values
@@ -36,7 +36,7 @@ Paste this into the project's `README.md` or `SECURITY.md`. Run through every bo
 
 - [ ] Financial/critical operations wrapped in transactions with proper locking
 - [ ] Database constraints as a final safety net (e.g. `balance >= 0`)
-- [ ] Manually tested with 10 parallel requests against each critical operation
+- [ ] Concurrency tested in staging or a disposable environment for each affected critical operation; never generate load against production without specific authorization
 
 ## Security headers
 
@@ -51,16 +51,17 @@ Paste this into the project's `README.md` or `SECURITY.md`. Run through every bo
 ## CORS
 
 - [ ] `Access-Control-Allow-Origin` is never `*` on an authenticated endpoint
-- [ ] Only the project's own domains are whitelisted
+- [ ] Only exact origins of the installation and approved clients are allowed; no wildcard or reflected `Origin` with credentials
 - [ ] `Access-Control-Allow-Credentials: true` is paired only with specific origins, never a wildcard or reflected `Origin` header
 
 ## Deployment
 
 - [ ] Debug mode / verbose logging is disabled in production
-- [ ] Source maps are not deployed to production
+- [ ] Source maps are not served publicly; if uploaded to an error tracker (e.g. Sentry), the upload is private and access restricted
 - [ ] `https://yourdomain.com/.git/HEAD` returns 404, not repo content
 - [ ] Preview/staging environments use test/staging keys, never production credentials
 - [ ] Error pages return generic messages, no stack traces, no internal paths
+- [ ] The candidate image booted in a disposable container with the real configuration, without exposing the values; rollback and post-cutover health were verified
 
 ## Tests
 

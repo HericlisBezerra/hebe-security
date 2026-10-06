@@ -132,3 +132,44 @@ export async function POST(request: Request) {
   // ... handle request
 }
 ```
+
+## Bot Protection Is Not Rate Limiting
+
+Rate limiting counts requests per origin. Bot protection decides whether the origin is a human. They solve different problems and neither substitutes the other: a distributed bot net stays under every per-IP threshold while still automating the abuse at full scale.
+
+Endpoints that need bot protection **on top of** rate limiting:
+
+- **Signup** — fake account farming, disposable-email churn, seeding accounts to later reset per-user limits.
+- **Login** — credential stuffing spread across thousands of residential IPs, each well under the throttle.
+- **Public forms** — contact, lead capture, newsletter, support ticket. Spam and lead-list poisoning.
+- **Checkout / payment** — card testing (BIN attacks): many low-value authorization attempts to find live cards.
+- **Content endpoints** — scraping the catalog, price list, or user-generated content at scale.
+- **Anything that costs money per call** — AI generation, SMS, email.
+
+### How the attacker exploits it
+
+- Runs credential stuffing from a residential proxy pool: each IP sends two or three requests, far below the limit, while the campaign as a whole tries millions of credentials.
+- Automates signup to farm accounts, then uses those accounts to reset per-user quotas at will — defeating the per-user half of a correctly built limiter.
+- Scripts card testing against the payment endpoint, staying under the threshold per source, and reads the success/failure difference to harvest live card numbers.
+- Scrapes the entire catalog through the public API with a headless browser that passes as a normal client.
+
+### Where to look in the code
+
+- Signup, login, password-reset and public form handlers — is there ANY human-verification challenge, or only a counter?
+- The CDN/edge config (Cloudflare, Vercel, AWS WAF) — is bot management actually enabled **for these routes**, or merely available on the plan?
+- Client-side-only defenses: a honeypot field or a challenge validated in the browser and never re-checked on the server is not protection.
+- Whether the challenge token is verified **server-side** against the provider's API on every submission.
+
+### How to reproduce
+
+- Replay the endpoint with `curl` — no browser, no JS execution — and confirm the request succeeds. If a headless request works, there is no bot protection.
+- Submit the form with the challenge field removed, or set to an arbitrary string, and confirm it is still accepted.
+- Distribute N requests across N source IPs and confirm no aggregate detection triggers.
+
+### Fix
+
+- Add a challenge on the abusable endpoints: **Cloudflare Turnstile** (invisible, privacy-preserving), hCaptcha, or reCAPTCHA v3.
+- **Verify the token server-side** on every submission — a token the server never validates is decoration.
+- Enable bot management at the edge so the traffic is dropped before it reaches your origin and your provider bill.
+- For signup specifically, combine with email verification and disposable-domain blocking.
+- Keep the rate limiting as well. The two layers catch different attackers; neither replaces the other.

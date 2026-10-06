@@ -7,3 +7,6 @@ node_modules/
 .env.*
 !.env.example
 *.pat
+
+# installation-specific audit profiles stay local (client architecture, not public)
+hebe-security-scan/references/one-*.md
