@@ -10,3 +10,7 @@ node_modules/
 
 # installation-specific audit profiles stay local (client architecture, not public)
 hebe-security-scan/references/one-*.md
+
+# Python tooling caches
+__pycache__/
+*.py[cod]

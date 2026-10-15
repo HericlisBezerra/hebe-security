@@ -1,109 +1,126 @@
-# 🛡️ hebe-security
+# hebe-security
 
-**An offensive security audit skill for AI coding assistants.**
+**Security review for coding agents, scoped to the change by default.**
 
-AI assistants ship features fast and get security wrong in predictable ways. This skill audits your codebase the way an attacker would — it detects your real stack first, then works through 18 categories with ~110 concrete checks, and demands a reproducible exploit for every finding instead of a vague warning.
-
-Works with **Claude Code** and any assistant that supports agent skills.
-
----
-
-## Why another security skill
-
-Most security checklists tell you *what* to look for. This one tells you **how to attack it, where the pattern hides in your stack, how to reproduce it, and what the fix looks like** — four sections for every single check.
-
-It also covers the two categories automated scanners consistently miss, because they require understanding the domain rather than the syntax:
-
-- **Race conditions** — every money, quota, coupon and toggle operation, tested under 10 concurrent identical requests.
-- **Business logic** — flows that mint value out of nothing. The signup → self-affiliate → self-coupon → buy → withdraw commission → refund loop is not a code bug; every individual step is authorized and valid.
+Version **2.4.1** works with Codex, Claude Code and other assistants that support
+agent skills. HeBe reviews the current diff and affected trust boundaries; it does
+not scan the entire project on every invocation. The 18-category playbook remains
+available for an explicitly requested HeBe Baseline.
 
 ## Install
 
-**Claude Code** — drop the folder into your skills directory:
-
 ```bash
 git clone https://github.com/HericlisBezerra/hebe-security.git
-cp -R hebe-security/hebe-security-scan ~/.claude/skills/
 ```
 
-Or copy `hebe-security-scan/` into any project's `.claude/skills/` to scope it to that repo.
+Copy `hebe-security-scan/` to your agent's user skills directory:
 
-## Use
+- Codex: `~/.codex/skills/`
+- Claude Code: `~/.claude/skills/`
 
-```
-/hebe-security-scan
-```
+For a shared codebase on the same machine, link both installations to one checkout
+instead of keeping independent copies. Preserve existing skills before replacing
+them; do not copy over a link assuming it is a separate installation. New sessions
+load the updated skill.
 
-Or just ask in natural language — the skill triggers on "audit this", "is this safe?", "review the security", "can someone hack this?", and on finishing any sensitive feature (auth, payment, upload, permissions, public API, AI endpoint).
+## Usage and scope
 
-It also runs **proactively**: when you ask it to *write* code touching auth, payments, database access or secrets, it consults the relevant reference first — preventing the vulnerability instead of finding it later.
+In Codex, invoke `$hebe-security-scan`; in Claude Code, use `/hebe-security-scan`.
+Include a PR, commit, diff or specific question, or invoke it in a task whose change
+is already clear. If the target is unclear, the skill asks which change to review.
 
-## How it works
-
-| Phase | What happens |
+| Work | Behavior |
 |---|---|
-| **0 · Scope** | What's in scope, can the app be run, production or dev, report-only or report + fix |
-| **1 · Recon** | Detects the real stack: language, framework, database, auth, ORM, deploy target, AI usage |
-| **2 · Surface** | Maps every route, hidden public endpoint, table, trust boundary and money/permission flow |
-| **3 · Audit** | Walks all 18 categories, loading only the references your stack actually needs |
-| **4 · Report** | Critical → High → Medium → Low, each with attack, impact, reproduction and a before/after fix |
-| **5 · Fix** | Only if asked. Never "fixes" by weakening a check. Adds a regression test per fix |
+| Implementing sensitive code | Relevant preventive guidance, without automatically launching an audit |
+| PR or update | Change review: diff, affected controls and necessary dependencies |
+| Release review | Reuse applicable source evidence; inspect remaining changes, configuration, migrations, artifact identity and rollback |
+| Consequential change to access, tenant authority, money or privileged execution | Focused independent source review using the installed Cloudflare skill |
+| Explicit comprehensive source audit or complete audit artifacts | Cloudflare's native full workflow and selected profile |
+| Explicit HeBe-only Baseline | HeBe's 18 applicable categories |
+| Deployed behavior | Separately authorized Runtime checks, with operational evidence kept distinct |
 
-## The 18 categories
+Unchanged checks are not repeated when their evidence remains applicable. Relevant
+unchanged dependencies may still need inspection. A scoped result is not a claim
+that the entire application is secure, and finishing the day does not itself
+trigger another audit.
 
-Grouped into five blocks. **The grouping is the reading order; the number is a stable ID** — a category added later keeps the ID it was born with instead of renumbering everything after it.
+## Cloudflare integration
 
-| Block | Categories |
-|---|---|
-| **A · Exposure and access** | 1 Secrets & env · 2 Access control / IDOR · 3 Database rules (RLS, Firebase, Convex) · 18 Sensitive data at rest · 4 Authentication & session · 5 Hidden public endpoints |
-| **B · Logic flaws** | 6 Race conditions · 7 Input validation · 8 Injection · 9 Mass assignment · 10 Business logic |
-| **C · Abuse and economics** | 11 Rate limiting, bot abuse & billing · 12 Payments · 13 AI / LLM integration |
-| **D · Platform** | 14 Mobile (React Native / Expo) |
-| **E · Infra and supply chain** | 15 Config, headers & CORS · 16 Deployment & environments · 17 Dependencies |
+The separate [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill)
+is an optional dependency for the delegated and full workflows. Install it in the
+same agent environment; it is not vendored in this repository. Read its current
+instructions when invoked.
 
-Plus: stack adapters for 11 stacks, regression tests, a pre-deploy checklist, OWASP Top 10 (2021) mapping, and secure prompt templates.
+HeBe chooses between focused guidance and a full audit without running two complete
+audits in parallel. A **quick** Cloudflare audit still uses its full native workflow
+with partial coverage; it is not silently replaced by guidance. Missing dependency,
+reviewer, execution sandbox or sufficient budget is reported with the affected gap.
+HeBe does not waive Cloudflare's validation or execution requirements.
 
-Each run picks the smallest useful review mode — **Change** (a diff or PR), **Release** (what is about to ship) or **Baseline** (the whole project) — and states what it did not cover.
+## Jev-assisted decisions
 
-The audit runs white-box against the repository by default. A **runtime mode** audits the deployed app black-box — headers the build stripped, TLS, CORS rewritten by a proxy, throttling that never fires at the edge, endpoints that are live but absent from the repo. Block E is where it pays off most.
+When review presents a meaningful semantic fork, Jev can suggest which evidence to
+inspect next, prioritize candidate paths, or flag possible duplicate root causes.
+Questions are batched over small non-secret summaries, not asked for every file.
+Clear decisions, arithmetic, hashes and permission rules do not need a model call.
 
-## The one rule that catches the most bugs
+Use configured Jev MCP tools when available. Otherwise the shared Python helper
+uses the standard library and a fixed TypeSafe TLS endpoint:
 
-> **Never trust the client.** Every price, user ID, role, subscription status, feature flag and rate-limit counter must be validated or enforced server-side. If it exists only in the browser, the mobile bundle, or the request body, the attacker controls it.
-
-## A finding looks like this
-
-```
-### [CRITICAL] Supabase service_role key exposed in client bundle
-
-Where:    lib/supabase.ts:3
-Category: 1 · Secrets & environment variables
-Attack:   Open DevTools → Sources → search the bundle for "service_role".
-Impact:   The key bypasses all Row-Level Security. Read, modify or delete
-          every row in the database, for every tenant.
-Repro:    curl the REST endpoint with the extracted key against a table
-          the anon key cannot read. It returns data.
-Fix:      Use the anon key client-side; service_role belongs only in
-          server-side code. Rotate the exposed key — it is burned.
+```bash
+python3 hebe-security-scan/scripts/jev_decide.py < bounded-decision.json
 ```
 
-## Structure
+See [the decision protocol](hebe-security-scan/references/jev-decisions.md) for the
+request schema and an example. Credentials come from `TYPESAFE_API_KEY` or an
+existing macOS Keychain entry; the helper never creates a secret file or prints a
+key. The historical default service is `ai.typesafe.hebe-fast-jev`; override its
+name with `HEBE_SECURITY_JEV_KEYCHAIN_SERVICE` when needed.
 
+Calls send the supplied summary to TypeSafe and may incur provider charges. Prepare
+safe inputs: the helper **does not redact secrets**. It caps requests, validates all
+answers, refuses redirects, and makes no automatic retry. Missing credentials or
+invalid responses return unavailable advice; the reasoning agent continues with
+its actual evidence and reports relevant limits.
+
+**Jev advice never confirms a vulnerability, sets final severity, discards an
+unresolved candidate, approves a deployment, grants authorization or substitutes
+for independent review.** It executes no returned suggestion. Its uncertainty
+thresholds are operational heuristics, not calibrated security guarantees.
+
+## Coverage and evidence
+
+The 18 categories cover secrets, authorization, database rules, sensitive data at
+rest, authentication, hidden endpoints, race conditions, input validation,
+injection, mass assignment, abuse, payments, AI/LLM integrations, mobile, headers,
+deployment and dependencies. The catalog and references load only when needed.
+
+Findings require a concrete trust boundary, attack path, impact and evidence.
+Distinguish confirmed findings from hypotheses and untested conditions. Fixes are
+applied only when requested and need relevant regression verification.
+
+Source review and deployed checks have different execution boundaries. Active
+security tests use appropriate isolated fixtures or staging; the workflow does not
+run destructive, load-generating or data-mutating production probes. A provider
+capacity error is not proof of an incompatible skill or an audit pass. The skill
+cannot automatically replace a main model that has stopped executing.
+
+Installation-specific profiles stay local and are excluded from the public package.
+The shared methodology does not hard-code Claude model aliases for Codex.
+
+## Validation
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
-hebe-security-scan/
-├── SKILL.md                    # the audit process, phases 0–5
-├── ATTRIBUTION.md              # origin and licence of incorporated material
-└── references/
-    ├── 01-secrets-and-env.md   … 17-dependencies.md
-    ├── stack-adapters.md       # code signatures per stack
-    ├── regression-tests.md
-    ├── pre-deploy-checklist.md
-    ├── owasp-top10.md
-    └── secure-prompt-templates.md
-```
 
-Each reference loads only when the audit reaches that category — the whole skill never sits in context at once.
+The helper contract tests cover malformed answers, probability validation,
+uncertainty, missing credentials, refusal of redirects and absence of action
+authority. These are tooling checks, not an application security audit or proof of
+classification accuracy. Live Jev calls are separate and are not run by unit tests.
 
-## Licence
+## License
 
-MIT — see [LICENSE](LICENSE). Built by **HeBeDigital** ([@hericlisbezerra](https://github.com/HericlisBezerra)).
+MIT — see [LICENSE](LICENSE). Built by HeBeDigital
+([@HericlisBezerra](https://github.com/HericlisBezerra)). Incorporated material and
+its license are preserved in [ATTRIBUTION.md](hebe-security-scan/ATTRIBUTION.md).

@@ -1,10 +1,11 @@
 ---
 name: hebe-security-scan
-description: Complete offensive security audit for any SaaS/web/mobile app, adapted to the project's real stack. Thinks like an attacker (red team) to find and fix vulnerabilities before they become incidents. Use when the user asks for a security review/audit/analysis, hardening, pentest, "is my app safe?", "find vulnerabilities", "review the security", "can someone hack this?", "check my code" — or when finishing/shipping a sensitive feature (auth, payment, upload, permissions, public API, AI endpoint). Also triggers proactively while WRITING code that touches authentication, payments, database access, API keys, secrets, or user data. Detects the stack first (language, framework, database, auth, ORM, deploy target), then runs a systematic audit across 18 categories (IDOR, RLS, race conditions, injection, secrets, rate limiting, bot abuse, payments, AI/LLM, mobile, data at rest, business logic, etc.). Can also audit the deployed app black-box (runtime mode).
+description: Diff-first security review for PRs, updates and releases, plus relevant prevention during implementation. Review only the requested change and affected trust boundaries by default. Route explicitly requested comprehensive audits or consequential boundary reviews to Cloudflare security-audit; no whole-project scan from a bare invocation.
 license: MIT
 metadata:
   author: HeBeDigital (@hericlisbezerra)
-  version: "2.2"
+  version: "2.4.1"
+  derived-from: "vibe-security by Chris Raroque / Aloa (MIT) — see ATTRIBUTION.md"
 ---
 
 # Security Scan — Red Team Review
@@ -30,29 +31,111 @@ when the missing answer changes the safety boundary or the deliverable:
 
 - **What is in scope?** Whole repo, one module, or the diff of a feature about to ship?
 - **Can you run the app?** Reproducing an exploit for real is worth ten theoretical findings. If there is no environment, say so and stay in static analysis.
-- **Production or dev?** Never run destructive tests, load tests or data-mutating exploits against production without explicit authorization.
+- **Production or dev?** Use staging or disposable fixtures for active security validation. Do not run destructive, load-generating or data-mutating production probes in this audit workflow.
 - **Report only, or report + fix?** (Phase 5 only happens if asked.)
 
-If the project has a Brain/vault, read the decision log first — a "vulnerability" may be a documented, accepted trade-off.
+Use the current task context and relevant Brain decisions for the affected component. Retrieve the specific decision when needed; do not reload the whole Brain/vault on every invocation.
 
-### Choose the smallest useful review mode
+### Default: review the delta, then stop
 
-| Mode | Use when | Coverage |
-|---|---|---|
-| **Change** | A commit, local diff, branch or PR is named | Changed code and the trust boundaries it reaches; load only relevant category references. Report what was not covered. |
-| **Release** | A deployment or production promotion is imminent | Changes since the deployed revision, migrations, runtime configuration, public routes, artifact and rollback. Include relevant category references and the pre-deploy checklist. |
-| **Baseline** | The user asks for a whole-project audit or there is no prior baseline | Inventory the whole repository and walk all 18 applicable categories. Record revision and coverage so later reviews can focus on deltas. |
+A bare invocation of this skill during implementation, a PR, update or release is
+not a request to scan the repository. For requested security review, default to
+Change on the active task's delta. Use an explicit PR/base/ref when supplied;
+otherwise use the established task branch/base or current staged/unstaged changes.
+Do not invent a base, include unrelated dirty work, or treat all historical commits
+as today's update. If no delta or named target is identifiable, ask which change
+instead of falling back to a full scan.
 
-Do not present a Change review as a full-project audit. Do not run the full 18-category
-baseline for every commit: it adds latency and repeats old findings. When several
-repositories are involved, assess each repository separately, then make one
-cross-service pass over shared identity, tenant boundaries and integration flows.
-If an installation-specific profile exists in `references/` (a local file, not
-distributed with the skill), load it only after identifying that installation.
+1. Inspect changed paths and diff before opening category references.
+2. Read affected code and follow dependencies only to resolve a concrete security
+   question (caller, authorization, shared guard, schema or consumer). An unchanged
+   shared control can be relevant; do not expand into unrelated modules or repos.
+3. Load only references relevant to those boundaries. Skip inventory of all routes,
+   tables and 18 categories for Change/Release. Ordinary UI/copy-only deltas can
+   finish after a bounded check without loading the security playbooks or agents.
+4. Stop when the in-scope security questions are answered or their specific gaps
+   are recorded. Do not keep hunting elsewhere to fill a report. Report findings
+   and coverage limits concisely; no full report files or category-by-category
+   no-finding checklist unless requested.
+5. On a later invocation, use the prior reviewed revision, delta and evidence when
+   available. Review new edits, fixes and invalidated assumptions; do not repeat
+   unchanged source checks/tests. If prior evidence is unavailable or stale, inspect
+   the currently requested delta and disclose that limit. Never infer a pass from
+   a filename, prior verdict or unchanged revision alone.
+
+At Release, reuse applicable source-review evidence; inspect the remaining delta,
+configuration/migrations, artifact identity and rollback pertinent to that release.
+Finishing the day does not itself trigger another source audit. Full coverage is
+only for an explicit whole-project/comprehensive audit, explicit complete audit
+artifacts, or a user-selected full method/profile. Missing baseline never triggers it.
+
+### Jev assistance at meaningful decision points
+
+When review has competing candidate paths, possible duplicate findings or a
+non-obvious next evidence check, use Jev for bounded semantic advice if available
+and permitted. Read [jev-decisions.md](references/jev-decisions.md) only at such a
+fork. Prefer batched questions and small non-secret summaries. Do not call Jev for
+clear/deterministic decisions, every file or ordinary UI-only work. The shared
+`scripts/jev_decide.py` is available when no configured MCP tool exists.
+
+The reasoning agent verifies the suggested next step against source. Jev never
+confirms a vulnerability, waives independent review, grants authorization or
+approves release. A low score cannot suppress an in-scope check or unresolved
+candidate. Missing Jev falls back to reasoning with disclosed limits, not a pass.
+
+### Select the workflow before reviewing
+
+The user's explicit method, scope, profile, budget and execution restrictions take
+precedence over defaults. Loading this skill is not authorization for an audit,
+external tests, delegation or release. Absence of a baseline never expands a diff.
+
+| Request | Workflow |
+|---|---|
+| Ordinary implementation involving sensitive code | **Prevention**: read the relevant HeBe category references and apply them to this implementation. No automatic audit, agents or report artifacts. |
+| Named diff, commit, PR or narrow security question | **Change**: review changed code and the trust boundaries it reaches. For consequential boundary changes, invoke focused independent Cloudflare guidance as defined below. |
+| Security review before deployment or promotion | **Release**: review changes, migrations, configuration, artifact identity and rollback. Keep source review separate from authorized operational checks. |
+| Deployed behavior or environment verification | **Runtime** within the authorized environment and operations; no implied whole-repository audit. |
+| Explicit comprehensive source audit, whole-codebase pentest or complete audit report artifacts | **Cloudflare full**: load the installed `security-audit` SKILL.md and follow its native workflow, standard by default or the explicitly selected quick/deep profile. A full workflow may have a scoped target. |
+| Explicit choice of HeBe's complete category review | **HeBe Baseline**: inventory the in-scope repository and walk its 18 applicable categories. Preserve the user's chosen method. |
+
+For requested Change/Release security reviews, invoke Cloudflare guidance in a
+fresh source reviewer when a change materially alters a trust boundary with
+consequential access, data, money or execution authority, or a material finding
+needs an independent challenge. A sensitive filename, provider name or routine
+implementation alone is insufficient. Read
+[security-audit-routing.md](references/security-audit-routing.md) for criteria,
+invocation, independence, blockers and source/runtime separation.
+
+A full Cloudflare run owns the source audit: do not also run HeBe Baseline.
+HeBe supplies relevant stack and installation context. Cloudflare's own mode,
+profile, validation, budget and execution requirements remain authoritative for
+that work; a focused guidance pass must not be called a full Cloudflare audit.
+
+For multiple repositories, state each scope separately and explicitly scope any
+cross-service review. Never present a Change or scoped review as whole-project
+coverage. Load an installation profile only when present locally and after
+identifying its target; these optional local profiles are not public package dependencies.
+
+### Evidence and independence
+
+Report a reachable trust-boundary violation and concrete impact, not a missing
+best practice alone. Separate confirmed findings, needs-validation hypotheses
+and untested observations. Do not assign vulnerability severity to unresolved
+hypotheses. Keep Cloudflare's native verdict and reporting contracts when selected.
+
+Independent review requires a fresh reviewer examining current source and evidence.
+Re-reading one's own answer, using a different model name or obtaining JEV agreement
+is not independent verification. If the reviewer or Cloudflare dependency is
+unavailable, disclose the missing review; do not claim completion or silently
+substitute another method. Preserve scope and report the work actually completed.
 
 ## Phase 1 — Recon: detect the real stack
 
-Never assume. Identify from the actual files:
+Use verified stack information already available for the affected component.
+For Change/Release, read manifests/config only when unknown, changed or needed to
+answer the review question. Full recon below applies to Baseline or the selected
+full workflow; it is not a prerequisite for every diff:
+
 
 - **Language and framework** — manifest (`package.json`, `requirements.txt`, `Gemfile`, `go.mod`, `composer.json`), config files, directory layout.
 - **Database and access layer** — raw SQL, ORM (Prisma, Drizzle, ActiveRecord, SQLAlchemy, Eloquent), Supabase, Firebase, Convex.
@@ -61,7 +144,7 @@ Never assume. Identify from the actual files:
 - **Client surfaces** — web SPA, SSR, mobile (React Native/Expo), public API, webhooks.
 - **AI/LLM usage** — any call to OpenAI/Anthropic/Google, tool calling, user input reaching a prompt.
 
-Then load `references/stack-adapters.md` for the code signatures of the detected stack.
+Load only the relevant section of `references/stack-adapters.md` when stack-specific guidance is needed.
 
 ### Project baseline (if it exists)
 
@@ -69,7 +152,9 @@ Check for existing guardrails before flagging their absence: `.gitignore`, secur
 
 ## Phase 2 — Map the attack surface
 
-List, from the code:
+For Change/Release, map only changed or affected entry points, resources and
+boundaries needed to answer the current questions. Do not enumerate the whole app.
+For an explicit HeBe Baseline, inventory the in-scope code as follows:
 
 1. **Every route/endpoint** — method, path, auth required?, who can call it.
 2. **Hidden public endpoints** — Server Actions, route handlers, RPC, edge functions, webhooks. These are public POST endpoints even when the UI is the only visible caller.
@@ -86,62 +171,29 @@ trust boundaries, then state coverage limits explicitly. Skip a category only
 when it is genuinely inapplicable (no mobile app → skip mobile) or outside the
 declared narrower scope.
 
-The categories are grouped into five blocks below. The **grouping is the reading order**; the **number is a stable ID** and never changes, so a category added later can appear inside its block while keeping the ID it was born with. Do not renumber.
-
-### A · Exposure and access — who can get in
-
-| # | Category | Reference |
-|---|---|---|
-| 1 | **Secrets & environment variables** | `references/01-secrets-and-env.md` |
-| 2 | **Access control / IDOR** | `references/02-access-control.md` |
-| 3 | **Database rules — Supabase RLS · Firebase · Convex** | `references/03-database-rules.md` |
-| 18 | **Sensitive data at rest** — encryption, key custody, backups, logs | `references/18-data-at-rest.md` |
-| 4 | **Authentication & session** | `references/04-authentication-session.md` |
-| 5 | **Hidden public endpoints** (Server Actions, route handlers) | `references/05-public-endpoints.md` |
-
-### B · Logic flaws — what they can do once in
-
-| # | Category | Reference |
-|---|---|---|
-| 6 | **Race conditions** | `references/06-race-conditions.md` |
-| 7 | **Input validation** | `references/07-input-validation.md` |
-| 8 | **Injection** — SQL, XSS, SSRF, command, template, ORM | `references/08-injection.md` |
-| 9 | **Mass assignment** | `references/09-mass-assignment.md` |
-| 10 | **Business logic** | `references/10-business-logic.md` |
-
-### C · Abuse and economics — what it costs you
-
-| # | Category | Reference |
-|---|---|---|
-| 11 | **Rate limiting, bot abuse & billing** | `references/11-rate-limiting.md` |
-| 12 | **Payments** | `references/12-payments.md` |
-| 13 | **AI / LLM integration** | `references/13-ai-llm.md` |
-
-### D · Platform
-
-| # | Category | Reference |
-|---|---|---|
-| 14 | **Mobile** (React Native / Expo) | `references/14-mobile.md` |
-
-### E · Infrastructure and supply chain — what shipped, not what was written
-
-| # | Category | Reference |
-|---|---|---|
-| 15 | **Config, headers & CORS** | `references/15-config-headers-cors.md` |
-| 16 | **Deployment & environments** | `references/16-deployment.md` |
-| 17 | **Dependencies** | `references/17-dependencies.md` |
-
-Block **E** is also where **runtime mode** pays off most — those three are the categories where the code can be right and the deployed app still wrong. See *Runtime mode* below.
+The 18 categories and their file paths are listed in
+[category-catalog.md](references/category-catalog.md). Load the catalog for HeBe
+Baseline or only if needed to select a relevant reference; do not load every
+category file for Change/Release. Cloudflare full uses its own native coverage plan.
 
 ### Mindset for every finding
 
 It is not enough to say "this is vulnerable". For each finding, **prove it**: which input, which sequence of requests, which wrong result. If you can run the app, reproduce it for real. A finding without a concrete failure scenario is a guess.
 
-### Use AI as the adversary (optional, powerful)
+### Challenge material findings
 
-If the user agrees, generate attack prompts for a second pass: ask an AI (or yourself, in a clean context) to try to **break** each critical route, then fix what it finds. This technique resolves the majority of easy vulnerabilities before a human ever looks.
+Use the focused independent Cloudflare route for consequential Change/Release
+boundaries and material findings. Do not duplicate a full audit or count a self-review
+as independent. A requested fix remains a separate implementation step, followed
+by regression verification; neither a second opinion nor JEV authorizes changes.
 
 ## Phase 4 — Findings report
+
+For Change/Release, give a short result with the reviewed delta, actionable findings
+and specific gaps. If there are no findings, say so with that scope; do not print
+18 clean categories or claim that the whole application is secure. Expand the
+finding format below only for actual findings. Full Cloudflare keeps its own output
+contract.
 
 Order by severity: **Critical → High → Medium → Low**. If you find a critical issue (exposed secret, RLS disabled, auth bypass, client-controlled price), **put it at the top of your response** — never bury it in a long list.
 
@@ -151,7 +203,7 @@ For each finding:
 ### [SEVERITY] Short title
 
 **Where:** `path/file.ts:42`
-**Category:** (one of the 17)
+**Category:** (one of the 18)
 **Attack:** what an attacker does, concretely — the input, the sequence, the outcome.
 **Impact:** what they get (read other tenants' data, free purchase, privilege escalation, drained billing).
 **Reproduction:** exact steps or request. If you ran it, say what actually happened.
@@ -181,7 +233,7 @@ These rules also apply **before** the vulnerability exists. When generating code
 
 ## Runtime mode — auditing the deployed app (black-box)
 
-Everything above is **white-box**: it reads the repository, finds the pattern in the code and demands a reproducible exploit. It never touches the running application. That leaves a whole class of defect invisible, because the code being right does not mean what shipped is right.
+Source review (**white-box**) examines repository paths and may use bounded local or staging checks within the selected method and authorization. Runtime review separately verifies the deployed artifact and its environment (**black-box**). Correct source does not prove that the deployed system behaves correctly. A source review does not authorize deployed checks.
 
 Run this mode against the deployed app to answer the second question — *is what is live correct?*
 
@@ -199,7 +251,7 @@ Run this mode against the deployed app to answer the second question — *is wha
 
 1. Enumerate the real surface first — hosts, subdomains, and the endpoints each one answers. The DNS zone and the certificate log are the inventory; the repository is not.
 2. For each live host, check headers, TLS, CORS and error responses against what `15-config-headers-cors.md` and `16-deployment.md` require.
-3. Probe the throttled endpoints for real and confirm the `429` actually arrives.
+3. Check throttling only within an explicitly authorized request budget in an isolated or staging environment. Do not increase live traffic until a `429` appears; otherwise record the check as untested.
 4. Compare a production API response against the shape the code returns locally — diff the fields.
 5. Report findings in the same format as Phase 4, tagged `[RUNTIME]` so it is obvious the evidence came from the deployed app and not the source.
 
@@ -209,14 +261,19 @@ Run this mode against the deployed app to answer the second question — *is wha
 - Prefer staging. Never run load-generating or destructive probes against production.
 - Read-only checks first. Anything that writes, deletes or spends money is out of scope unless separately authorized in writing.
 
-**Combining the two passes.** Runtime and code findings are complementary, not duplicates. Merge them keyed on `(endpoint or file, category)`. When both passes flag the same issue, say so explicitly — two independent lenses agreeing is a confidence signal, not redundancy to be collapsed. Running the two passes with **different models** is worth doing for the same reason: different lenses catch different bugs, and high-risk security work should not close on a single model's opinion.
+**Combining the two passes.** Keep source revision, deployed artifact, environment,
+execution method and limits separate. Deduplicate by root cause and affected trust
+boundary; endpoint/category alone may group different defects. Runtime work is a
+separately requested and authorized operational task, never a way to run a test
+blocked by Cloudflare's sandbox rules. Its evidence cannot be relabelled as sandboxed
+reproduction or overwrite the canonical Cloudflare verdict. See the routing reference.
 
 ## Rules of conduct
 
 - **Report only genuine security issues.** Do not pad the report with style nitpicks — noise buries the real finding.
 - **No secret values, ever.** In reports, logs or commits, write `KEY=<redacted>`. Documenting *where* a secret lives and *how to rotate it* is useful; documenting the value destroys the point.
 - **A key that ever reached a remote is burned.** Removing it from history does not undo exposure — whoever cloned has it. The only real fix is rotation.
-- **Never run destructive tests against production** without explicit authorization.
+- **No destructive, load-generating or data-mutating production probes in this audit workflow.** Use staging or disposable fixtures for active security validation.
 - **Stay in scope.** Do not attack third-party infrastructure that is not the user's.
 - If the project uses AI-generated code heavily, weight categories **6 (race conditions)** and **10 (business logic)** — those are the ones AI gets wrong most and scanners catch least.
 
@@ -228,8 +285,12 @@ When running scheduled and non-interactive:
 - Never apply fixes automatically — produce the report and stop.
 - Never run destructive or load-generating tests.
 - Report only new findings versus the previous run, so the signal does not drown.
+- Preserve the scheduled method, scope and resource budget; do not expand a delta
+  check into a full Cloudflare run. Record unavailable review or validation as a gap.
 
 ## Extra references
+
+- `references/security-audit-routing.md` — select and invoke Cloudflare guidance/full without duplicating audits or mixing source and runtime evidence.
 
 - `references/stack-adapters.md` — code signatures per stack (Node/TS, Next.js, Python, Rails, PHP/Laravel, Go, Supabase, Firebase, Convex, React Native/Expo).
 - `references/regression-tests.md` — turning each finding into a test that fails if the hole reopens.

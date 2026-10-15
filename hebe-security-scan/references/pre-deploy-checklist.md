@@ -1,5 +1,10 @@
 # Pre-Deploy Security Checklist
 
+Operational checks involving a running image, real configuration, migrations or
+post-cutover health belong to separately scoped and authorized HeBe Release/Runtime
+work. They are not instructions for a Cloudflare source-audit executor and do not
+relax its sandbox or evidence requirements.
+
 Adapt this checklist to the installation and to the risk of the change; do not paste it into the project wholesale. Mark items that do not apply and record what was not tested.
 
 ## Secrets

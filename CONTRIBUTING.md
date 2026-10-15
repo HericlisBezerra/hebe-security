@@ -16,7 +16,7 @@ A check without a reproduction step is a guess. Please don't add those.
 ## Adding a category
 
 Categories live in `hebe-security-scan/references/NN-name.md` and are listed in the
-table in `SKILL.md`. Keep each reference self-contained: it loads on its own, without
+table in `references/category-catalog.md`. Keep each reference self-contained: it loads on its own, without
 the others in context.
 
 ## Adding a stack adapter
