@@ -43,7 +43,7 @@ Tooling: **gitleaks**, **TruffleHog** — run as a pre-commit hook and again as 
 
 ### How to reproduce
 1. Clone the repo fresh (or check out an old commit) and grep for the patterns above.
-2. Run `gitleaks detect --redact -v` against the full history (or `trufflehog git file://. --no-verification`), not just HEAD. TruffleHog verifies keys against providers by default; never run it without `--no-verification` here.
+2. Run `gitleaks detect --redact -v` against the full history, not just HEAD. Do not use TruffleHog in this review: it verifies keys against providers by default and prints the raw value even with `--no-verification`.
 3. Do **not** test a found key against the provider. Record location (file:line or commit) and type, treat it as exposed, and recommend rotation; whether it is still active is for the key owner to check in the provider console.
 
 ### Fix
