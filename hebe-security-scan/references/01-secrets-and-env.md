@@ -6,7 +6,7 @@
 If a repository is public — or becomes public by accident (misconfigured visibility, forked, leaked, sold, acquired) — any secret sitting in source code is instantly compromised. Attackers also run automated crawlers/bots that continuously scan public GitHub for known key patterns (`sk_live_`, `AKIA...`, `ghp_...`) within seconds of a push, well before a human would notice. This is the single most catastrophic and most common mistake AI coding assistants make: an AI trying to "just make deploy work" will paste a real API key, database password, or private key directly into a config file, script, or even a comment.
 
 ### Where to look in the code
-Grep for common secret-shaped identifiers and known credential patterns across all source, config, and env-like files. List file names (`-l`), never matching lines, so no value reaches the transcript. Classify the type by which vendor pattern matched (one `grep -l` per pattern); if you must see the line, mask it first, e.g. `sed -E 's/([=:][[:space:]"'\'']*)[^[:space:]"'\'']{4,}/\1<redacted>/g'`:
+Grep for common secret-shaped identifiers and known credential patterns across all source, config, and env-like files. List file names (`-l`), never matching lines, so no value reaches the transcript. Classify the type by which vendor pattern matched (one `grep -l` per pattern); to locate it, print only file and line number, never line content: `grep -rEn '<pattern>' <file> | cut -d: -f1,2`.
 
 ```bash
 # generic patterns (name-based)
