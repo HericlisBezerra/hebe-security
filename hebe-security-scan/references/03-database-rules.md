@@ -16,11 +16,13 @@ Check every table in the `public` schema (and any other schema exposed via Postg
 ```sql
 SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public';
 ```
-A table where `rowsecurity` is `false` is open to the extent of its grants; check them:
+A table where `rowsecurity` is `false` is open to the extent of its grants; check them (this counts grants to `PUBLIC` and inherited roles):
 ```sql
-SELECT grantee, privilege_type FROM information_schema.role_table_grants
-WHERE table_schema = 'public' AND table_name = '<table>' AND grantee IN ('anon','authenticated');
-``` Migration scripts should be scanned for tables created without a corresponding `ENABLE ROW LEVEL SECURITY` statement.
+SELECT has_table_privilege('anon', 'public.<table>', 'SELECT') AS anon_select,
+       has_table_privilege('anon', 'public.<table>', 'INSERT,UPDATE,DELETE') AS anon_write,
+       has_table_privilege('authenticated', 'public.<table>', 'SELECT') AS auth_select;
+```
+Migration scripts should be scanned for tables created without a corresponding `ENABLE ROW LEVEL SECURITY` statement.
 
 A defensive migration to catch every missed table:
 ```sql
@@ -34,11 +36,11 @@ END $$;
 ```
 
 #### How to reproduce
-**Test with the real `anon` key, never with `service_role`.** This is the single most important testing discipline for RLS: the `service_role` key bypasses RLS entirely, so testing with it will always look secure regardless of the actual policy configuration — it proves nothing. Reproduce with the public client exactly as an attacker would use it:
+**Test with the `anon` key, never with `service_role`.** This is the single most important testing discipline for RLS: the `service_role` key bypasses RLS entirely, so testing with it will always look secure regardless of the actual policy configuration — it proves nothing. Reproduce with the public client exactly as an attacker would use it, against a local stack (`supabase start` with the migrations applied) and fictitious test users — never the published project:
 ```bash
-curl "https://<project>.supabase.co/rest/v1/documents?select=*" \
-  -H "apikey: <anon_key>" \
-  -H "Authorization: Bearer <anon_key_or_a_real_user_jwt>"
+curl "http://127.0.0.1:54321/rest/v1/documents?select=*" \
+  -H "apikey: <local_anon_key>" \
+  -H "Authorization: Bearer <local_anon_key_or_test_user_jwt>"
 ```
 If this returns rows belonging to other users (or returns rows at all when it shouldn't), RLS is broken — either missing entirely or misconfigured.
 
@@ -160,16 +162,17 @@ Audit every table in the schema, not just the ones a feature obviously touches. 
 ### SECURITY DEFINER Functions
 
 #### How the attacker exploits it
-`SECURITY DEFINER` functions run with the privileges of the function's owner, not the caller. Whether that bypasses RLS depends on the owner: superusers and `BYPASSRLS` roles always bypass it, and a table owner bypasses it unless the table has `FORCE ROW LEVEL SECURITY`. On Supabase, functions created in the Dashboard or by migrations are owned by `postgres`, which bypasses RLS. `EXECUTE` is granted to `PUBLIC` by default, so a definer function in an exposed schema (e.g. `public`) is callable through `rpc()` by `anon` unless `EXECUTE` is revoked — regardless of what RLS policies exist on the tables it touches internally.
+`SECURITY DEFINER` functions run with the privileges of the function's owner, not the caller. Whether that bypasses RLS depends on the owner: superusers and `BYPASSRLS` roles always bypass it, and a table owner bypasses it unless the table has `FORCE ROW LEVEL SECURITY`. On Supabase, functions created in the Dashboard or by migrations are owned by `postgres`, which bypasses RLS. `EXECUTE` is granted to `PUBLIC` by default, so a definer function in an exposed schema (e.g. `public`) is callable through `rpc()` by `anon` unless `EXECUTE` is revoked from both `PUBLIC` and `anon` (Supabase also grants it to `anon`/`authenticated` explicitly through default privileges) — regardless of what RLS policies exist on the tables it touches internally.
 
 #### Where to look in the code
-Grep migrations for `SECURITY DEFINER` and check: (1) what schema the function lives in, (2) who owns it and whether the tables it touches use `FORCE ROW LEVEL SECURITY`, (3) whether `EXECUTE` was revoked from `PUBLIC`/`anon`, (4) whether it validates its inputs and the caller, (5) whether `search_path` is pinned.
+Grep migrations for `SECURITY DEFINER` and check: (1) what schema the function lives in, (2) who owns it and whether the tables it touches use `FORCE ROW LEVEL SECURITY`, (3) whether `EXECUTE` was revoked from `PUBLIC` **and** `anon` (and `authenticated` if not intended) — confirm with `has_function_privilege('anon', 'public.f(argtypes)', 'EXECUTE')`, (4) whether it validates its inputs and the caller, (5) whether `search_path` is pinned.
 
 #### How to reproduce
 Call the function via `rpc()` using the anon key and see whether it returns or mutates data that RLS should have blocked.
 
 #### Fix
 - Keep `SECURITY DEFINER` functions in a `private` schema, not `public`, so they aren't auto-exposed via the REST API.
+- If it must stay callable from a client, revoke what is not intended: `REVOKE EXECUTE ON FUNCTION public.f(argtypes) FROM PUBLIC, anon;` (and `authenticated` when only the server calls it).
 - Set `SET search_path = ''` on the function to prevent search-path hijacking (an attacker-controlled schema earlier in the path could otherwise shadow a table/function the definer-privileged function relies on).
 - Validate all inputs inside the function body — it is your last line of defense once RLS has been bypassed by design.
 

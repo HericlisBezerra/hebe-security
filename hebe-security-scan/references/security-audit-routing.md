@@ -44,12 +44,17 @@ that alter who can access sensitive data; and, by name:
 - a CI/deploy workflow (triggers, secrets, tokens, publish/promote steps);
 - a cache rule that can store or serve authenticated content;
 - server-side fetch of a user-supplied URL;
-- a source feeding LLM context, and the exposure or scope of an MCP server.
+- a new or changed source feeding LLM context, and the exposure or scope of an MCP server.
+
+Any non-cosmetic change to a named item triggers independent review; "materially" applies
+to the unnamed categories. A cosmetic-only change (rename, formatting, comment) records
+`Fronteiras tocadas: nenhuma, porque cosmético`.
 
 Record the decision in every Change/Release output:
 `Fronteiras tocadas: <X> → revisão independente` or
 `Fronteiras tocadas: nenhuma, porque <reason>`. Determine this from actual changes and
-reachability, not the project name, category, use of AI, or an auth-related path.
+reachability against the list above, not merely from the project name, a category
+label, the presence of AI, or an auth-sounding file path.
 ONE, Formy, AMC, InPol and other products use these same criteria. Read each product's
 Brain, decisions and current source; a product label is not a verdict.
 
@@ -58,8 +63,9 @@ Brain, decisions and current source; a product label is not a verdict.
 For focused guidance, delegate to a fresh reviewer with the target, source revision
 and dirty-state limits, in-scope paths/boundaries, question, permitted resources,
 applicable HeBe installation reference and the resolved `security-audit` path.
-The handoff receipt records: that resolved path; its revision (git commit when it is
-a checkout, otherwise `shasum -a 256` of its SKILL.md); the mode (guidance or full,
+The handoff receipt records: that resolved path; its revision (git commit plus
+`git status --porcelain` when it is a checkout; otherwise a digest of the whole directory:
+`find <path> -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256`); the mode (guidance or full,
 with profile); and the Cloudflare modules applied (e.g. `AI-AND-LLM.md`).
 Instruct it to load that skill in **guidance mode**, examine current source and
 return evidence, refuted claims and unresolved facts. Do not request a full report

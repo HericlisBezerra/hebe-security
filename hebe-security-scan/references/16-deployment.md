@@ -31,9 +31,9 @@ Source maps let DevTools reconstruct your original, unminified source code — i
 
 ### How to reproduce
 ```bash
-curl -s https://yoursite.com/_next/static/chunks/main.js.map -o /dev/null -w "%{http_code}\n"
-# or check DevTools → Sources tab on the live production site — if you can read
-# original, unminified source with real variable names, source maps are exposed
+# on the local production build output; the published site is Runtime work
+find .next/static dist build out -name '*.map' 2>/dev/null | head
+# any .map shipped in the deploy output means original source is exposed
 ```
 
 ### Fix
@@ -78,7 +78,7 @@ Preview/staging deployments (e.g. Vercel PR previews) are often reachable by any
 | Development | Local dev, uses local/test keys |
 
 ### How to reproduce
-Open a PR preview deployment URL and check (via its own debug/env-echo endpoint if one exists, or by triggering an action that hits a third-party API) whether it is using live/production credentials versus test credentials.
+Compare the per-environment variable configuration (names and scopes in the Vercel/Netlify dashboard or `wrangler` config, never values): a production-scoped secret also assigned to Preview is the finding. Do not call env-echo endpoints or trigger third-party actions on a preview; checking the published preview is Runtime work with the owner's authorization.
 
 ### Fix
 Use fully separate environment variables per environment. Preview deployments must **never** use production API keys, database credentials, or payment keys — treat every preview URL as public by default.
@@ -88,7 +88,7 @@ Use fully separate environment variables per environment. Preview deployments mu
 ## Pre-Ship Checks
 
 Run before every production deploy:
-- Run `gitleaks detect` on the repo to scan for leaked secrets across git history.
+- Run `gitleaks detect --redact` on the repo to scan for leaked secrets across git history.
 - Verify `.env` files are listed in `.gitignore`.
 - Confirm debug mode / verbose logging is disabled for the production build/environment.
 - Check that error pages don't leak stack traces.

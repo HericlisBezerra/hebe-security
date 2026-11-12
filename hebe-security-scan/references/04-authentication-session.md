@@ -57,9 +57,9 @@ Without a rate limit, an attacker throws thousands of password guesses, resets, 
 ```bash
 # local or disposable staging only, against a test account you own
 seq 20 | xargs -P20 -I{} curl -s -X POST http://localhost:3000/api/login \
-  -d '{"email":"test-user@example.test","password":"guess{}"}'
+  -H "Content-Type: application/json" -d '{"email":"test-user@example.test","password":"guess{}"}'
 ```
-No `429` here shows only that the app code has no limiter. An edge/WAF or provider limit (e.g. Supabase Auth) may still exist outside the repo; without seeing it, record `needs_validation`, not a confirmed absence.
+No `429`, lockout or challenge here shows only that the app code has no limiter. An edge/WAF or provider limit (e.g. Supabase Auth) may still exist outside the repo; without seeing it, record `needs_validation`, not a confirmed absence.
 
 ### Fix
 - Login: 5 attempts / 15 min / IP, plus 10 / email.

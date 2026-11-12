@@ -28,7 +28,7 @@ Every one of these endpoints needs rate limiting. AI assistants almost never add
 
 ### How to reproduce
 
-- First read the code and edge config for a limiter on the route. To confirm behavior, send a small bounded number of requests just above the configured limit to a local or disposable staging instance with the provider mocked, and check for `429`.
+- First read the code and edge config for a limiter on the route. To confirm behavior, send a small bounded number of requests just above the configured limit to a local or disposable staging instance with the provider mocked, and check for `429`, lockout or challenge.
 - Never measure this against production or a real paid provider; an unknown edge limit is `needs_validation`, not an absence.
 
 ### Fix
@@ -115,7 +115,7 @@ Apply two independent limits â€” one keyed by client IP, one keyed by user ID â€
 ## Implementation Pattern
 
 ```typescript
-// Example: rate limiting with Upstash Redis
+// Example: rate limiting with Upstash Redis in a Cloudflare Worker (client IP header is platform-specific)
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
@@ -131,8 +131,10 @@ export async function POST(request: Request) {
   // platform's documented client-IP source, never the raw header.
   const ip = request.headers.get('cf-connecting-ip');
   if (!ip) return new Response('Bad request', { status: 400 });
-  const { success } = await ratelimit.limit(`ip:${ip}`);
-  if (!success) {
+  const ipOk = (await ratelimit.limit(`ip:${ip}`)).success;
+  const userId = await getUserId(request); // your auth; null when anonymous
+  const userOk = userId ? (await ratelimit.limit(`user:${userId}`)).success : true;
+  if (!ipOk || !userOk) {
     return new Response('Too many requests', { status: 429 });
   }
   // ... handle request

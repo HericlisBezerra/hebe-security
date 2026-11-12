@@ -10,8 +10,8 @@ Adapt this checklist to the installation and to the risk of the change; do not p
 ## Secrets
 
 - [ ] `.env` and other credential exports are ignored at any depth; also check files **already tracked** and the staged diff
-- [ ] No secret is grep-able in the source (`gitleaks detect`)
-- [ ] `gitleaks detect` has been run against the full repo, including git history, not just the working tree
+- [ ] No secret is grep-able in the source (`gitleaks detect --redact`)
+- [ ] `gitleaks detect --redact` has been run against the full repo, including git history, not just the working tree
 - [ ] `.env.example` is committed with variable **names** only, no real values
 - [ ] Any secret that has ever leaked has been **rotated** (not just removed — old commits and reflog still hold it)
 
@@ -55,7 +55,7 @@ Adapt this checklist to the installation and to the risk of the change; do not p
 
 ## CORS
 
-- [ ] `Access-Control-Allow-Origin: *` only on public, credential-free responses (never on data served without auth that is not meant to be public)
+- [ ] `Access-Control-Allow-Origin: *` only on public, credential-free responses
 - [ ] Only exact origins of the installation and approved clients are allowed; no reflected `Origin` or suffix/regex match
 - [ ] `Access-Control-Allow-Credentials: true` is paired only with one specific allowed origin (plus `Vary: Origin`)
 - [ ] Cookie-authenticated state-changing routes have CSRF protection (`SameSite`, token or `Origin` check) independent of CORS

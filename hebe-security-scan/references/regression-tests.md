@@ -47,9 +47,9 @@ Generate integration tests covering these scenarios:
 A simple way to manually confirm a race condition exists, before encoding it as an automated test:
 
 ```bash
-# Fire 10 identical requests in parallel
-seq 10 | xargs -P 10 -I{} curl -X POST https://api.exemplo.com/compra \
-  -H "Authorization: Bearer $TOKEN" \
+# Fire 10 identical requests in parallel — local or disposable staging, test user only
+seq 10 | xargs -P 10 -I{} curl -X POST http://localhost:3000/compra \
+  -H "Authorization: Bearer $TEST_TOKEN" -H "Content-Type: application/json" \
   -d '{"curso_id": 1}'
 # then check final state: was it counted once, or ten times? does the balance add up?
 ```

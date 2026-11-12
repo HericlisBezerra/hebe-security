@@ -19,7 +19,7 @@ bundle audit          # Ruby
 govulncheck ./...     # Go
 composer audit        # PHP
 ```
-The audit tool's severity is the advisory's, not the project's. Report it as a finding only after showing the vulnerable function is reachable here (caller, input, conditions), with severity limited to that demonstrated impact; otherwise list it as hardening. Always cite the CVE ID, the affected package + version, and the fixed version.
+The audit tool's severity is the advisory's, not the project's. Report it as a finding only after showing the vulnerable function is reachable here (caller, input, conditions), with severity limited to that demonstrated impact. Unreachable → hardening; reachability unresolved (depends on config or deploy) → `needs_validation` naming the missing fact. Always cite the CVE ID, the affected package + version, and the fixed version.
 
 ### Fix
 - Upgrade to the patched version indicated by the audit tool. If a direct upgrade isn't possible (breaking change), evaluate a transitive override/resolution pin as a stopgap, but track it as tech debt.

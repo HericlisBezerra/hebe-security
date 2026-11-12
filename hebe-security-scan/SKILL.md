@@ -31,7 +31,7 @@ when the missing answer changes the safety boundary or the deliverable:
 
 - **What is in scope?** Whole repo, one module, or the diff of a feature about to ship?
 - **Can you run the app?** Reproducing an exploit for real is worth ten theoretical findings. If there is no environment, say so and stay in static analysis.
-- **Production or dev?** Use staging or disposable fixtures for active security validation. Do not run destructive, load-generating or data-mutating production probes in this audit workflow.
+- **Production or dev?** Use local fixtures or a disposable staging copy with fictitious data for active security validation (see the execution contract). Do not run destructive, load-generating or data-mutating production probes in this audit workflow.
 - **Report only, or report + fix?** (Phase 5 only happens if asked.)
 
 Use the current task context and relevant Brain decisions for the affected component. Retrieve the specific decision when needed; do not reload the whole Brain/vault on every invocation.
@@ -91,7 +91,7 @@ external tests, delegation or release. Absence of a baseline never expands a dif
 
 | Request | Workflow |
 |---|---|
-| Ordinary implementation involving sensitive code | **Prevention**: read the relevant HeBe category references and apply them to this implementation. No automatic audit, agents or report artifacts. If the implementation touches a consequential boundary (list in the routing reference), end with one line recommending an independent security review of it before merge. |
+| Ordinary implementation involving sensitive code | **Prevention**: read the relevant HeBe category references and apply them to this implementation. No automatic audit, agents or report artifacts. If the implementation touches a consequential boundary (list in the routing reference), end with `Fronteiras tocadas: <X> → revisão independente recomendada antes do merge`. |
 | Named diff, commit, PR or narrow security question | **Change**: review changed code and the trust boundaries it reaches. For consequential boundary changes, invoke focused independent Cloudflare guidance as defined below. |
 | Security review before deployment or promotion | **Release**: review changes, migrations, configuration, artifact identity and rollback. Keep source review separate from authorized operational checks. |
 | Deployed behavior or environment verification | **Runtime** within the authorized environment and operations; no implied whole-repository audit. |
@@ -121,7 +121,9 @@ identifying its target; these optional local profiles are not public package dep
 
 ### Execution and secrecy contract
 
-Applies to every workflow and overrides any reproduction step in a reference file:
+Applies to every workflow and overrides any reproduction step in a reference file.
+Runtime may touch only the environment and operations its owner explicitly
+authorized, read-only first; everything else below still applies.
 
 - Reproduce only locally, against fixtures, or in a disposable staging copy with
   fictitious data and test identities. Never use a real credential, a paid quota,
@@ -210,11 +212,11 @@ by regression verification; neither a second opinion nor JEV authorizes changes.
 For Change/Release, give a short result with the reviewed delta, actionable findings
 and specific gaps. If there are no findings, say so with that scope; do not print
 18 clean categories or claim that the whole application is secure. Expand the
-finding format below only for actual findings. Full Cloudflare keeps its own output
+record format below only for records worth reporting. Full Cloudflare keeps its own output
 contract.
 
 Put `confirmed` records first, ordered by severity; then `needs_validation`; then
-hardening notes. Never assign severity from a category label alone — a disabled RLS
+hardening notes. Mention `rejected` (one line) only when it explains a prior claim. Never assign severity from a category label alone — a disabled RLS
 flag or a secret-shaped string is critical only when the demonstrated impact is.
 
 For each record:
@@ -232,10 +234,13 @@ For each record:
 **rejected only:** one-line reason. **hardening:** one-line recommendation.
 ```
 
-Use the Cloudflare severity anchors: critical = unauthenticated code execution, full
-data-store access or arbitrary account takeover; high = full defeat of an explicit
-control with real consequences; medium = real violation with limited blast radius;
-low = minor disclosure or effort-heavy minimal gain.
+Use the Cloudflare severity anchors: critical = an unauthenticated actor gains code
+execution, full data-store access or arbitrary account takeover; high = full defeat
+of an explicit control with real consequences (auth bypass, cross-tenant read/write,
+stored XSS against other users, authenticated code execution); medium = real
+violation with limited blast radius; low = minor disclosure or effort-heavy minimal gain.
+
+Fix example (shape of a confirmed record's fix):
 
 ```typescript
 // Before — vulnerable
@@ -300,7 +305,7 @@ reproduction or overwrite the canonical Cloudflare verdict. See the routing refe
 - **Report only genuine security issues.** A best-practice gap without a demonstrated boundary result is hardening, not a finding. Do not pad the report with style nitpicks — noise buries the real finding.
 - **No secret values, ever.** In reports, logs or commits, write `KEY=<redacted>`. Documenting *where* a secret lives and *how to rotate it* is useful; documenting the value destroys the point.
 - **A key that ever reached a remote is burned.** Removing it from history does not undo exposure — whoever cloned has it. The only real fix is rotation.
-- **No destructive, load-generating or data-mutating production probes in this audit workflow.** Use staging or disposable fixtures for active security validation.
+- **No destructive, load-generating or data-mutating production probes in this audit workflow.** Use local fixtures or a disposable staging copy with fictitious data for active security validation (see the execution contract).
 - **Stay in scope.** Do not attack third-party infrastructure that is not the user's.
 - If the project uses AI-generated code heavily, weight categories **6 (race conditions)** and **10 (business logic)** — those are the ones AI gets wrong most and scanners catch least.
 

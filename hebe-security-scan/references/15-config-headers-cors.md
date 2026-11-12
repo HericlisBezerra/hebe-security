@@ -14,9 +14,10 @@ Without enforced HTTPS, an attacker positioned on the network path (public Wi-Fi
 
 ### How to reproduce
 ```bash
-curl -I http://yoursite.com
+# local production build or preview; the published site is Runtime work
+curl -I http://localhost:3000
 # check whether it redirects to https, and whether Strict-Transport-Security is present on the https response
-curl -I https://yoursite.com | grep -i strict-transport-security
+curl -I https://localhost:3000 | grep -i strict-transport-security
 ```
 
 ### Fix
@@ -40,7 +41,7 @@ CSP is the last line of defense against XSS: even if an attacker manages to inje
 
 ### How to reproduce
 ```bash
-curl -I https://yoursite.com | grep -i content-security-policy
+curl -I https://localhost:3000 | grep -i content-security-policy
 ```
 Then attempt a benign injection (`<script>alert(1)</script>`) in any field that gets reflected/rendered, and check whether the browser console reports a CSP violation or actually executes it.
 
@@ -66,7 +67,7 @@ Each missing header removes a specific browser-enforced protection:
 
 ### How to reproduce
 ```bash
-curl -I https://yoursite.com
+curl -I https://localhost:3000
 ```
 Check for the presence and value of each header below.
 
@@ -106,7 +107,7 @@ Use `SameSite=Strict` when the cookie never needs to be sent from a cross-site c
 CORS decides whether a page on another origin may **read** a response in the browser. Separate the cases:
 
 - **`Access-Control-Allow-Origin: *` without credentials.** Browsers refuse `*` for requests made with credentials (`credentials: 'include'`), so the victim's cookies cannot be used to read the response. The risk is only a response that returns sensitive data **without** any credential (e.g. trusted by network location, or data that should not be public). For truly public data, `*` is fine.
-- **Reflected `Origin` + `Access-Control-Allow-Credentials: true`.** The dangerous case: home-rolled logic echoes whatever `Origin` arrives, so any site can make a cookie-authenticated request and read the victim's data. Same for a loose allowlist match (suffix/regex like `evil-example.com`, or `null`).
+- **Reflected `Origin` + `Access-Control-Allow-Credentials: true`.** The dangerous case: home-rolled logic echoes whatever `Origin` arrives, so any site can make a cookie-authenticated request and read the victim's data — when the session cookie is `SameSite=None` or the attacker controls a same-site origin (with `Lax`/`Strict` the browser does not send it on a cross-site fetch). Same for a loose allowlist match (suffix/regex like `evil-example.com`, or `null`).
 - **API authenticated by bearer token in a header.** The browser does not attach that token on its own, so another site cannot ride the victim's session through CORS; a permissive `*` there is usually not a finding unless the token is also accepted from a cookie.
 - **CSRF is a different problem.** CORS does not stop a cross-site form or simple request from being **sent** with cookies; state-changing cookie-authenticated endpoints need `SameSite`, a CSRF token or an `Origin` check regardless of CORS.
 
@@ -122,7 +123,7 @@ CORS decides whether a page on another origin may **read** a response in the bro
 curl -s -D - -o /dev/null http://localhost:3000/api/me \
   -H "Origin: https://evil.example" -H "Cookie: <test-user session>"
 ```
-A finding needs `Access-Control-Allow-Origin: https://evil.example` **and** `Access-Control-Allow-Credentials: true` on a response with the test user's data — or `*` on sensitive data served without credentials. `*` alone on a cookie-authenticated route is not readable cross-site.
+A finding needs `Access-Control-Allow-Origin: https://evil.example` **and** `Access-Control-Allow-Credentials: true` on a response with the test user's data, **and** a browser that would actually send the cookie: `SameSite=None`, or an attacker origin that is same-site (e.g. a subdomain). `curl` sends the cookie by hand, so check the `Set-Cookie` attributes too. Or `*` on sensitive data served without credentials. `*` alone on a cookie-authenticated route is not readable cross-site.
 
 ### Fix
 - Allow only exact, known origins (production, staging, local dev); never reflect an arbitrary `Origin` and never use substring/suffix matching.
