@@ -33,8 +33,22 @@ independent review for a consequential changed boundary or a selected full workf
 
 Consequential boundaries include cross-service SSO/session revocation; tenant or
 role authority; payment, credit or balance integrity; webhook authenticity/replay;
-privileged agent tool execution; and secrets/key custody or export/restore paths
-that alter who can access sensitive data. Determine this from actual changes and
+privileged agent tool execution; secrets/key custody or export/restore paths
+that alter who can access sensitive data; and, by name:
+
+- a migration that creates or alters an RLS policy, GRANT/REVOKE, `SECURITY DEFINER`
+  function, view, or storage (`storage.objects`/bucket) policy;
+- a new endpoint, route handler, RPC or function reachable without authentication;
+- file upload handling and signed URL issuance;
+- account recovery, invitations, account linking and OAuth/SSO callbacks;
+- a CI/deploy workflow (triggers, secrets, tokens, publish/promote steps);
+- a cache rule that can store or serve authenticated content;
+- server-side fetch of a user-supplied URL;
+- a source feeding LLM context, and the exposure or scope of an MCP server.
+
+Record the decision in every Change/Release output:
+`Fronteiras tocadas: <X> → revisão independente` or
+`Fronteiras tocadas: nenhuma, porque <reason>`. Determine this from actual changes and
 reachability, not the project name, category, use of AI, or an auth-related path.
 ONE, Formy, AMC, InPol and other products use these same criteria. Read each product's
 Brain, decisions and current source; a product label is not a verdict.
@@ -44,6 +58,9 @@ Brain, decisions and current source; a product label is not a verdict.
 For focused guidance, delegate to a fresh reviewer with the target, source revision
 and dirty-state limits, in-scope paths/boundaries, question, permitted resources,
 applicable HeBe installation reference and the resolved `security-audit` path.
+The handoff receipt records: that resolved path; its revision (git commit when it is
+a checkout, otherwise `shasum -a 256` of its SKILL.md); the mode (guidance or full,
+with profile); and the Cloudflare modules applied (e.g. `AI-AND-LLM.md`).
 Instruct it to load that skill in **guidance mode**, examine current source and
 return evidence, refuted claims and unresolved facts. Do not request a full report
 or six-phase artifacts for this focused review. Give a blind reviewer the question

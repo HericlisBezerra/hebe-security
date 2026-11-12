@@ -1,5 +1,9 @@
 # HeBe category catalog
 
+> Every "How to reproduce" step below runs under the execution and secrecy contract in
+> `SKILL.md`: local, fixture or disposable staging with fictitious data only; no real
+> credential, paid quota, real data or published environment; secrets reported by location and type, never value.
+
 Read for an explicit HeBe Baseline or when category selection is unclear.
 For Change/Release, open only the relevant category references.
 

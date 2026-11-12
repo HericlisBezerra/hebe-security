@@ -2,7 +2,7 @@
 
 **Security review for coding agents, scoped to the change by default.**
 
-Version **2.4.1** works with Codex, Claude Code and other assistants that support
+Version **2.5.0** works with Codex, Claude Code and other assistants that support
 agent skills. HeBe reviews the current diff and affected trust boundaries; it does
 not scan the entire project on every invocation. The 18-category playbook remains
 available for an explicitly requested HeBe Baseline.

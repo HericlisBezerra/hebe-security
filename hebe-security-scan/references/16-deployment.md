@@ -52,7 +52,8 @@ If the deploy process copies the entire project directory (including the hidden 
 
 ### How to reproduce
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://yoursite.com/.git/HEAD
+# against a local build/preview of the deploy artifact; the published site is Runtime work
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/.git/HEAD
 # a 200 with git ref content means the entire source and history are exposed
 ```
 

@@ -55,10 +55,11 @@ Without a rate limit, an attacker throws thousands of password guesses, resets, 
 
 ### How to reproduce
 ```bash
-seq 20 | xargs -P20 -I{} curl -s -X POST https://app/api/login \
-  -d '{"email":"victim@example.com","password":"guess{}"}'
+# local or disposable staging only, against a test account you own
+seq 20 | xargs -P20 -I{} curl -s -X POST http://localhost:3000/api/login \
+  -d '{"email":"test-user@example.test","password":"guess{}"}'
 ```
-If all 20 attempts are processed without any lockout/429, there is no rate limit.
+No `429` here shows only that the app code has no limiter. An edge/WAF or provider limit (e.g. Supabase Auth) may still exist outside the repo; without seeing it, record `needs_validation`, not a confirmed absence.
 
 ### Fix
 - Login: 5 attempts / 15 min / IP, plus 10 / email.
@@ -133,6 +134,8 @@ Tokens stored in `localStorage` are readable by any JavaScript running on the pa
 ### Where to look in the code
 - `localStorage.setItem('token', ...)` / `localStorage.getItem('token')` anywhere in the client code.
 - Auth token or refresh token passed to the client for manual storage instead of being set as a cookie by the server.
+
+Calibration: storing the session in `localStorage` is the supabase-js default and many SPA SDKs do the same. On its own it is hardening, not a finding; it becomes part of a finding only together with a demonstrated XSS (or other script injection) that can read it.
 
 ### How to reproduce
 If any XSS vector exists elsewhere in the app (see input-validation / injection references), demonstrate that `document.cookie` returns nothing for the auth cookie (proving `HttpOnly` is working) versus `localStorage.getItem('token')` returning the raw token (proving it is exposed).

@@ -21,8 +21,8 @@ Audit this category whenever the app stores any of: government IDs (CPF/SSN/pass
 
 ### How to reproduce
 
-- Query the table directly with an admin/service connection and confirm the value comes back human-readable.
-- Restore or open a recent backup and confirm the same.
+- Read the write path in code. To confirm, run it against a local or disposable database seeded with fictitious values and check the stored column is ciphertext.
+- Never query production with an admin connection or open a real backup in this review; that is Runtime work with separate authorization.
 
 ### Fix
 

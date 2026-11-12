@@ -30,12 +30,13 @@ The attacker simply increments/decrements a sequential numeric ID, or reuses a U
 
 Minimal reproduction as a one-liner:
 ```bash
-curl -s https://api.example.com/api/posts/123 -H "Authorization: Bearer $USER_A_TOKEN"
-# if this returns a post owned by a different user, it's IDOR
+# local or disposable staging, two test users
+curl -s http://localhost:3000/api/posts/123 -H "Authorization: Bearer $TEST_USER_A_TOKEN"
+# IDOR only if post 123 belongs to test user B, is not meant to be readable by A, and no other rule (sharing, public flag) grants it
 ```
 
 ### Fix
-Every read and write must filter by ownership **inside the query itself**, not as an after-the-fact check on already-fetched data. Return **404** (not 403) for a resource that isn't the caller's — a 403 confirms the resource exists at all, which is itself information leakage; 404 reveals nothing about whether the ID is valid, deleted, or someone else's.
+Every read and write must filter by ownership **inside the query itself**, not as an after-the-fact check on already-fetched data. Return **404** (not 403) for a resource that isn't the caller's — a 403 confirms the resource exists at all, which is itself information leakage; 404 reveals nothing about whether the ID is valid, deleted, or someone else's. In a review, a 403-vs-404 difference is hardening unless knowing that the ID exists is itself sensitive here (e.g. reveals a customer or a private record).
 
 Generic pattern:
 ```

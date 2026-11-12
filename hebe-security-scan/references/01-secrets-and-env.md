@@ -6,15 +6,17 @@
 If a repository is public — or becomes public by accident (misconfigured visibility, forked, leaked, sold, acquired) — any secret sitting in source code is instantly compromised. Attackers also run automated crawlers/bots that continuously scan public GitHub for known key patterns (`sk_live_`, `AKIA...`, `ghp_...`) within seconds of a push, well before a human would notice. This is the single most catastrophic and most common mistake AI coding assistants make: an AI trying to "just make deploy work" will paste a real API key, database password, or private key directly into a config file, script, or even a comment.
 
 ### Where to look in the code
-Grep for common secret-shaped identifiers and known credential patterns across all source, config, and env-like files:
+Grep for common secret-shaped identifiers and known credential patterns across all source, config, and env-like files. List file names (`-l`) or counts, never matching lines, so no value reaches the transcript; then open only the needed line to classify it without copying the value:
 
 ```bash
 # generic patterns (name-based)
-grep -rEi '(api[_-]?key|secret|token|password|bearer|private[_-]?key)' \
-  --include='*.{js,ts,py,rb,go,php,java,env,json,yml,yaml}' . | grep -v node_modules
+grep -rEil '(api[_-]?key|secret|token|password|bearer|private[_-]?key)' \
+  --include='*.js' --include='*.ts' --include='*.py' --include='*.rb' --include='*.go' \
+  --include='*.php' --include='*.java' --include='*.json' --include='*.yml' --include='*.yaml' \
+  --exclude-dir=node_modules .
 
 # known vendor key formats
-grep -rE '(sk_live_|sk_test_|AKIA[0-9A-Z]{16}|ghp_[0-9a-zA-Z]{36}|glpal-|glpat-|xox[baprs]-|Bearer )' .
+grep -rElc '(sk_live_|sk_test_|AKIA[0-9A-Z]{16}|ghp_[0-9a-zA-Z]{36}|glpal-|glpat-|xox[baprs]-|Bearer )' --exclude-dir=node_modules .
 ```
 
 Named patterns to specifically check for:
@@ -34,7 +36,7 @@ git ls-files | grep .env
 
 And search git **history**, not just the current tree — a secret that was later "removed" in a newer commit still lives in the reflog and in every clone/fork that pulled before the removal:
 ```bash
-git log -p -S 'SECRET' --all | head
+git log --all -S 'SECRET' --format='%h %ad %an' --name-only   # commits and files, no patch text
 ```
 
 Tooling: **gitleaks**, **TruffleHog** — run as a pre-commit hook and again as a CI job scanning every PR.
@@ -42,7 +44,7 @@ Tooling: **gitleaks**, **TruffleHog** — run as a pre-commit hook and again as 
 ### How to reproduce
 1. Clone the repo fresh (or check out an old commit) and grep for the patterns above.
 2. Run `gitleaks detect` (or TruffleHog) against the full history, not just HEAD.
-3. If any hit returns a live-looking key, attempt to use it against the real provider API (in a safe/read-only way) to confirm it is still active — a still-valid key confirms the finding is exploitable, not theoretical.
+3. Do **not** test a found key against the provider. Record location (file:line or commit) and type, treat it as exposed, and recommend rotation; whether it is still active is for the key owner to check in the provider console.
 
 ### Fix
 - **Zero secrets in source, ever.** All credentials come from environment variables, injected at runtime.

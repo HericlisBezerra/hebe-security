@@ -7,7 +7,7 @@ Stack-agnostic offensive reference. For each subtopic: how the attacker exploits
 ## SQL Injection
 
 ### How the attacker exploits it
-A modern ORM with parameterization protects you by default. The risk is `raw()` / `$queryRawUnsafe` / string concatenation. The attacker sends input like `' OR 1=1 --` or `'; DROP TABLE users; --` into any field that ends up inside a query string, and the database executes it as code instead of data.
+A modern ORM with parameterization protects you by default. The risk is `raw()` / `$queryRawUnsafe` / string concatenation. The attacker sends input like `' OR 1=1 --` or a stacked statement into any field that ends up inside a query string, and the database executes it as code instead of data.
 
 ### Where to look in the code
 - Queries built with `+` / string concatenation.
@@ -16,7 +16,7 @@ A modern ORM with parameterization protects you by default. The risk is `raw()` 
 - Anywhere user input reaches a query without going through a parameter/placeholder.
 
 ### How to reproduce
-Send `' OR 1=1 --`, `'; DROP`, quotes and comment sequences in any field that reaches a query. If the app returns unexpected rows, errors out with a SQL syntax message, or executes the injected clause, it's vulnerable.
+Locally or against a disposable database with fictitious data, send non-destructive probes (`'`, `' OR 1=1 --`, a boolean pair like `' AND 1=1 --` vs `' AND 1=2 --`) in a field that reaches a query. Never send `DROP`, `DELETE` or stacked writes. A SQL syntax error alone only shows the quote reached the parser; confirmation needs the injected clause to change the result (extra/other rows, boolean difference) — and the source trace to the unparameterized query.
 
 ### Fix
 Always use parameterized queries or ORM methods. Never concatenate user input into SQL strings.

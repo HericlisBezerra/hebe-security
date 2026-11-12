@@ -27,7 +27,8 @@ A concrete real-world pattern seen in the wild: a platform with an affiliate pro
 
 ```bash
 # 10 identical requests in parallel
-seq 10 | xargs -P10 -I{} curl -s -X POST https://app/api/compra \
+# local or disposable staging only, with a test user and fictitious balance
+seq 10 | xargs -P10 -I{} curl -s -X POST http://localhost:3000/api/compra \
   -H "Authorization: Bearer $TOKEN" -d '{"item_id":1}'
 # then: check the final state. Did it count 1 or 10? Does the balance add up?
 ```

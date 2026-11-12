@@ -9,14 +9,18 @@ This is the **#1 source of critical vulnerabilities in vibe-coded apps.** AI ass
 ### Enable RLS on Every Table
 
 #### How the attacker exploits it
-Tables created via the SQL Editor or via migrations have RLS **disabled by default**. A table without RLS enabled is fully readable and writable by anyone holding the `anon` key — and the `anon` key is, by design, public (it ships in the client bundle). An attacker doesn't even need to find a bug in a policy; they just need to find a table where RLS was never turned on at all, which happens constantly when new tables are added after the initial security pass and nobody remembers to re-run the checklist.
+Tables created with SQL (SQL Editor or migrations) have RLS **disabled by default**. With RLS off, access is governed only by ordinary GRANTs. On many Supabase projects a new `public` table starts with full privileges granted to `anon` and `authenticated`, so in an exposed schema it is readable and writable by anyone holding the `anon` key — and the `anon` key is, by design, public (it ships in the client bundle). Confirm the grants and whether the schema is exposed through the Data API before calling it open. An attacker doesn't even need to find a bug in a policy; they just need to find a table where RLS was never turned on at all, which happens constantly when new tables are added after the initial security pass and nobody remembers to re-run the checklist.
 
 #### Where to look in the code
 Check every table in the `public` schema (and any other schema exposed via PostgREST) for RLS status:
 ```sql
 SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public';
 ```
-Any table where `rowsecurity` is `false` is wide open. Migration scripts should be scanned for tables created without a corresponding `ENABLE ROW LEVEL SECURITY` statement.
+A table where `rowsecurity` is `false` is open to the extent of its grants; check them:
+```sql
+SELECT grantee, privilege_type FROM information_schema.role_table_grants
+WHERE table_schema = 'public' AND table_name = '<table>' AND grantee IN ('anon','authenticated');
+``` Migration scripts should be scanned for tables created without a corresponding `ENABLE ROW LEVEL SECURITY` statement.
 
 A defensive migration to catch every missed table:
 ```sql
@@ -71,33 +75,46 @@ Always scope to the row owner:
 CREATE POLICY "Users can view own data" ON public.documents
   FOR SELECT TO authenticated USING ((SELECT auth.uid()) = user_id);
 ```
-As a general audit heuristic: any policy `USING` clause that references only `auth.uid()`'s existence, and never compares it against a column on the row, should be treated as a finding until proven otherwise.
+As a general audit heuristic: any policy `USING` clause that references only `auth.uid()`'s existence, and never compares it against a column on the row, should be treated as a candidate to check: it is a finding when the table holds per-user or per-tenant data and a test user can read or write another user's rows; on genuinely shared data it is not.
 
 ---
 
-### Missing WITH CHECK
+### Write policies that let ownership change (WITH CHECK)
 
 #### How the attacker exploits it
-`USING` alone controls which existing rows a policy applies to for reads; it does **not** constrain what a user is allowed to *write* into a row on `INSERT`/`UPDATE`. Without a matching `WITH CHECK`, a user can pass an `UPDATE` that changes the row's ownership column to someone else, or `INSERT` a row claiming to belong to another user — effectively reassigning or forging ownership.
-
+For `UPDATE` (and `FOR ALL`), PostgreSQL checks the existing row against `USING` and the new row against `WITH CHECK`; when `WITH CHECK` is omitted, the `USING` expression is reused as the check. So `FOR UPDATE USING (auth.uid() = user_id)` alone already blocks changing `user_id` to someone else. `FOR INSERT` accepts only `WITH CHECK` (a `USING` there is a syntax error). The real risks are:
 ```sql
--- BAD: user can UPDATE user_id to someone else's ID
-CREATE POLICY "Users can update tasks" ON public.tasks
-  FOR UPDATE TO authenticated USING ((SELECT auth.uid()) = user_id);
-```
-
-#### Where to look in the code
-Any `CREATE POLICY ... FOR INSERT` or `FOR UPDATE` that has a `USING` clause but no `WITH CHECK` clause.
-
-#### How to reproduce
-As an authenticated low-privilege user, attempt to `UPDATE` a row you own but change its owner column to another user's ID (or another tenant's ID), or `INSERT` a row with `user_id` set to someone else's UUID. If it succeeds, the policy is missing `WITH CHECK`.
-
-#### Fix
-```sql
--- GOOD: WITH CHECK prevents changing user_id
+-- BAD: WITH CHECK looser than USING — owner can hand the row to anyone
 CREATE POLICY "Users can update tasks" ON public.tasks
   FOR UPDATE TO authenticated
   USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK (true);
+
+-- BAD: INSERT check that never compares the owner column
+CREATE POLICY "Users can create tasks" ON public.tasks
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() IS NOT NULL);
+```
+Also look at policies whose `USING` does not constrain the owner/tenant column at all, and at a second permissive policy on the same command — permissive policies combine with OR, so the loosest one wins.
+
+#### Where to look in the code
+- `FOR UPDATE`/`FOR ALL` policies whose `WITH CHECK` is present and weaker than `USING` (e.g. `true`, only `auth.uid() IS NOT NULL`, or a different column).
+- `FOR INSERT` policies whose `WITH CHECK` does not compare `auth.uid()` (or the tenant) with the owner column.
+- Several permissive policies for the same table and command.
+
+#### How to reproduce
+On a local or disposable database with two test users, as user A attempt to `UPDATE` a row A owns setting its owner column to user B's ID, or `INSERT` a row with `user_id` set to B's ID. If it succeeds, the write check is too loose.
+
+#### Fix
+```sql
+-- GOOD: explicit and equal on both sides
+CREATE POLICY "Users can update tasks" ON public.tasks
+  FOR UPDATE TO authenticated
+  USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK ((SELECT auth.uid()) = user_id);
+
+CREATE POLICY "Users can create tasks" ON public.tasks
+  FOR INSERT TO authenticated
   WITH CHECK ((SELECT auth.uid()) = user_id);
 ```
 
@@ -143,10 +160,10 @@ Audit every table in the schema, not just the ones a feature obviously touches. 
 ### SECURITY DEFINER Functions
 
 #### How the attacker exploits it
-`SECURITY DEFINER` functions run with the privileges of the function's owner, not the caller — meaning they **bypass RLS entirely** by design. If such a function is created in the `public` schema, it is directly callable via the REST API (PostgREST auto-exposes it) by anyone with the anon key, regardless of what RLS policies exist on the tables it touches internally.
+`SECURITY DEFINER` functions run with the privileges of the function's owner, not the caller. Whether that bypasses RLS depends on the owner: superusers and `BYPASSRLS` roles always bypass it, and a table owner bypasses it unless the table has `FORCE ROW LEVEL SECURITY`. On Supabase, functions created in the Dashboard or by migrations are owned by `postgres`, which bypasses RLS. `EXECUTE` is granted to `PUBLIC` by default, so a definer function in an exposed schema (e.g. `public`) is callable through `rpc()` by `anon` unless `EXECUTE` is revoked — regardless of what RLS policies exist on the tables it touches internally.
 
 #### Where to look in the code
-Grep migrations for `SECURITY DEFINER` and check: (1) what schema the function lives in, (2) whether it validates its inputs, (3) whether `search_path` is pinned.
+Grep migrations for `SECURITY DEFINER` and check: (1) what schema the function lives in, (2) who owns it and whether the tables it touches use `FORCE ROW LEVEL SECURITY`, (3) whether `EXECUTE` was revoked from `PUBLIC`/`anon`, (4) whether it validates its inputs and the caller, (5) whether `search_path` is pinned.
 
 #### How to reproduce
 Call the function via `rpc()` using the anon key and see whether it returns or mutates data that RLS should have blocked.
@@ -161,10 +178,10 @@ Call the function via `rpc()` using the anon key and see whether it returns or m
 ### Storage Buckets
 
 #### How the attacker exploits it
-Storage buckets are a separate permission surface from database tables and are easy to forget. Without their own policies, any authenticated user can upload, read, or delete **any file in the bucket**, including files that belong to other users.
+Storage buckets are a separate permission surface from database tables and are easy to forget. With no policy on `storage.objects`, Storage denies uploads and other operations (safe, but often "fixed" with an over-broad policy). A **public** bucket lets anyone with the URL read (download) its files without any policy, but uploads, deletes, moves and copies still require policies. The real risks are a policy that does not scope by bucket and owner folder (any authenticated user can read, overwrite or delete other users' files) and sensitive files placed in a public bucket.
 
 #### Where to look in the code
-Check `storage.objects` policies for each bucket used by the app. A bucket with no policies (or an overly broad one) allows cross-user file access.
+Check `storage.objects` policies for each bucket used by the app: a policy that omits `bucket_id` or the owner-folder check allows cross-user file access. Check which buckets are public and whether they hold anything that is not meant for anyone with the link.
 
 #### How to reproduce
 As User A, attempt to read, overwrite, or delete a file path known to belong to User B (e.g. `avatars/<user_b_uuid>/photo.jpg`) using the anon key + User A's JWT.

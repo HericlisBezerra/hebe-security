@@ -3,7 +3,7 @@
 ## Known CVEs in direct and transitive dependencies
 
 ### How the attacker exploits it
-A dependency (direct or transitive) with a known, published CVE is a documented, often weaponized attack path — no original research needed on the attacker's part, just matching your `package.json`/`requirements.txt`/lockfile against public vulnerability databases. A critical CVE in a direct dependency (auth library, ORM, template engine, image processor, etc.) is treated as a High/Critical finding on its own, independent of anything else in the audit.
+A dependency (direct or transitive) with a known, published CVE is a documented, often weaponized attack path — no original research needed on the attacker's part, just matching your `package.json`/`requirements.txt`/lockfile against public vulnerability databases. A CVE is not a finding by itself: in a review it becomes one only when the affected function or code path is reachable from attacker-controlled input in this project; otherwise it is an upgrade/hardening item.
 
 ### Where to look
 - Lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `Pipfile.lock`, `poetry.lock`, `Gemfile.lock`, `go.sum`, `composer.lock`) — the actual resolved versions, not just the version ranges in the manifest.
@@ -19,7 +19,7 @@ bundle audit          # Ruby
 govulncheck ./...     # Go
 composer audit        # PHP
 ```
-A critical/high finding in a direct dependency is an immediate Critical/High-severity item in the report — cite the CVE ID, the affected package + version, and the fixed version.
+The audit tool's severity is the advisory's, not the project's. Report it as a finding only after showing the vulnerable function is reachable here (caller, input, conditions), with severity limited to that demonstrated impact; otherwise list it as hardening. Always cite the CVE ID, the affected package + version, and the fixed version.
 
 ### Fix
 - Upgrade to the patched version indicated by the audit tool. If a direct upgrade isn't possible (breaking change), evaluate a transitive override/resolution pin as a stopgap, but track it as tech debt.

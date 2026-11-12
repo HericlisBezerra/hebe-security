@@ -103,26 +103,32 @@ Use `SameSite=Strict` when the cookie never needs to be sent from a cross-site c
 ## CORS
 
 ### How the attacker exploits it
-`Access-Control-Allow-Origin: *` on an authenticated endpoint means **any website on the internet** can make a browser-side request to your API using the victim's own cookies/credentials (if credentials are involved) or can simply read the response if the endpoint returns sensitive data without requiring credentials at all. An attacker only needs to lure the victim to a malicious page — the victim's browser does the rest.
+CORS decides whether a page on another origin may **read** a response in the browser. Separate the cases:
+
+- **`Access-Control-Allow-Origin: *` without credentials.** Browsers refuse `*` for requests made with credentials (`credentials: 'include'`), so the victim's cookies cannot be used to read the response. The risk is only a response that returns sensitive data **without** any credential (e.g. trusted by network location, or data that should not be public). For truly public data, `*` is fine.
+- **Reflected `Origin` + `Access-Control-Allow-Credentials: true`.** The dangerous case: home-rolled logic echoes whatever `Origin` arrives, so any site can make a cookie-authenticated request and read the victim's data. Same for a loose allowlist match (suffix/regex like `evil-example.com`, or `null`).
+- **API authenticated by bearer token in a header.** The browser does not attach that token on its own, so another site cannot ride the victim's session through CORS; a permissive `*` there is usually not a finding unless the token is also accepted from a cookie.
+- **CSRF is a different problem.** CORS does not stop a cross-site form or simple request from being **sent** with cookies; state-changing cookie-authenticated endpoints need `SameSite`, a CSRF token or an `Origin` check regardless of CORS.
 
 ### Where to look in the code
-- CORS middleware/config: `cors()` called with no options (defaults to permissive in some setups), or explicitly configured with `origin: '*'`.
-- Any endpoint that returns authenticated/personal data and doesn't restrict `Access-Control-Allow-Origin` to known origins.
-- `Access-Control-Allow-Credentials: true` paired with a wildcard or reflected origin — this combination should never validate in a correctly implemented server, but home-rolled CORS logic sometimes reflects whatever `Origin` header the client sent back as the allowed origin, which defeats the purpose entirely.
+- CORS middleware/config that reflects the request `Origin` (e.g. `origin: true`, a callback returning the input) together with `credentials: true`.
+- Allowlist checks with `endsWith`, `includes`, unanchored regex, or that accept `null`.
+- `origin: '*'` on a route that returns non-public data without requiring a credential.
+- Cookie-authenticated state-changing routes with no CSRF defense.
 
 ### How to reproduce
 ```bash
-curl -I -X OPTIONS https://api.example.com/api/me \
-  -H "Origin: https://evil.example" \
-  -H "Access-Control-Request-Method: GET"
-# check the Access-Control-Allow-Origin value in the response
+# local or staging instance
+curl -s -D - -o /dev/null http://localhost:3000/api/me \
+  -H "Origin: https://evil.example" -H "Cookie: <test-user session>"
 ```
-If it echoes back `https://evil.example` or returns `*` on an authenticated route, CORS is misconfigured.
+A finding needs `Access-Control-Allow-Origin: https://evil.example` **and** `Access-Control-Allow-Credentials: true` on a response with the test user's data — or `*` on sensitive data served without credentials. `*` alone on a cookie-authenticated route is not readable cross-site.
 
 ### Fix
-- **Never** use `Access-Control-Allow-Origin: *` on an endpoint that requires authentication.
-- Whitelist only your own known domains (production domain, staging domain, local dev origin) — never reflect an arbitrary `Origin` header back as allowed.
-- If `Access-Control-Allow-Credentials: true` is needed, it **must** be paired with one specific, explicitly allowed origin — never a wildcard, and never a naively reflected origin.
+- Allow only exact, known origins (production, staging, local dev); never reflect an arbitrary `Origin` and never use substring/suffix matching.
+- Send `Access-Control-Allow-Credentials: true` only with one specific allowed origin, and add `Vary: Origin`.
+- Use `*` only for genuinely public, credential-free responses.
+- Protect cookie-authenticated mutations against CSRF independently of CORS.
 
 ---
 

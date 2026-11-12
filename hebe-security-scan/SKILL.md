@@ -4,7 +4,7 @@ description: Diff-first security review for PRs, updates and releases, plus rele
 license: MIT
 metadata:
   author: HeBeDigital (@hericlisbezerra)
-  version: "2.4.1"
+  version: "2.5.0"
   derived-from: "vibe-security by Chris Raroque / Aloa (MIT) — see ATTRIBUTION.md"
 ---
 
@@ -91,7 +91,7 @@ external tests, delegation or release. Absence of a baseline never expands a dif
 
 | Request | Workflow |
 |---|---|
-| Ordinary implementation involving sensitive code | **Prevention**: read the relevant HeBe category references and apply them to this implementation. No automatic audit, agents or report artifacts. |
+| Ordinary implementation involving sensitive code | **Prevention**: read the relevant HeBe category references and apply them to this implementation. No automatic audit, agents or report artifacts. If the implementation touches a consequential boundary (list in the routing reference), end with one line recommending an independent security review of it before merge. |
 | Named diff, commit, PR or narrow security question | **Change**: review changed code and the trust boundaries it reaches. For consequential boundary changes, invoke focused independent Cloudflare guidance as defined below. |
 | Security review before deployment or promotion | **Release**: review changes, migrations, configuration, artifact identity and rollback. Keep source review separate from authorized operational checks. |
 | Deployed behavior or environment verification | **Runtime** within the authorized environment and operations; no implied whole-repository audit. |
@@ -103,8 +103,11 @@ fresh source reviewer when a change materially alters a trust boundary with
 consequential access, data, money or execution authority, or a material finding
 needs an independent challenge. A sensitive filename, provider name or routine
 implementation alone is insufficient. Read
-[security-audit-routing.md](references/security-audit-routing.md) for criteria,
-invocation, independence, blockers and source/runtime separation.
+[security-audit-routing.md](references/security-audit-routing.md) for the named
+boundary list, invocation, independence, blockers and source/runtime separation.
+Every Change/Release output states the decision in one line:
+`Fronteiras tocadas: <X> → revisão independente` or
+`Fronteiras tocadas: nenhuma, porque <reason>`.
 
 A full Cloudflare run owns the source audit: do not also run HeBe Baseline.
 HeBe supplies relevant stack and installation context. Cloudflare's own mode,
@@ -115,6 +118,21 @@ For multiple repositories, state each scope separately and explicitly scope any
 cross-service review. Never present a Change or scoped review as whole-project
 coverage. Load an installation profile only when present locally and after
 identifying its target; these optional local profiles are not public package dependencies.
+
+### Execution and secrecy contract
+
+Applies to every workflow and overrides any reproduction step in a reference file:
+
+- Reproduce only locally, against fixtures, or in a disposable staging copy with
+  fictitious data and test identities. Never use a real credential, a paid quota,
+  real personal/customer data or a published environment. Those checks are HeBe
+  Runtime work and need separate, explicit authorization from the environment owner.
+- Prefer static proof and a minimal harness; stop at the first observable boundary
+  result. No load, saturation, destructive or data-mutating probes outside that copy.
+- For a secret, report its location (file:line, commit, artifact) and type, never the
+  value or a prefix of it. Never validate a found key against the provider; treat it
+  as exposed and recommend rotation. Run search commands that list file names or
+  counts, not matching lines.
 
 ### Evidence and independence
 
@@ -178,7 +196,7 @@ category file for Change/Release. Cloudflare full uses its own native coverage p
 
 ### Mindset for every finding
 
-It is not enough to say "this is vulnerable". For each finding, **prove it**: which input, which sequence of requests, which wrong result. If you can run the app, reproduce it for real. A finding without a concrete failure scenario is a guess.
+It is not enough to say "this is vulnerable". For each finding, **prove it**: which input, which sequence of requests, which wrong result. If you can run the app, reproduce it within the execution contract above. A finding without a concrete failure scenario is a guess.
 
 ### Challenge material findings
 
@@ -195,20 +213,29 @@ and specific gaps. If there are no findings, say so with that scope; do not prin
 finding format below only for actual findings. Full Cloudflare keeps its own output
 contract.
 
-Order by severity: **Critical → High → Medium → Low**. If you find a critical issue (exposed secret, RLS disabled, auth bypass, client-controlled price), **put it at the top of your response** — never bury it in a long list.
+Put `confirmed` records first, ordered by severity; then `needs_validation`; then
+hardening notes. Never assign severity from a category label alone — a disabled RLS
+flag or a secret-shaped string is critical only when the demonstrated impact is.
 
-For each finding:
+For each record:
 
 ```
-### [SEVERITY] Short title
+### <verdict> — Short title
 
-**Where:** `path/file.ts:42`
-**Category:** (one of the 18)
-**Attack:** what an attacker does, concretely — the input, the sequence, the outcome.
-**Impact:** what they get (read other tenants' data, free purchase, privilege escalation, drained billing).
-**Reproduction:** exact steps or request. If you ran it, say what actually happened.
-**Fix:** before/after code.
+**Verdict:** confirmed | needs_validation | hardening (not a finding) | rejected
+**Boundary:** <lower-trust principal> sends <input/action>; <expected control> should
+  stop it at <boundary>; it reaches <resource/principal>; observed: <result>.
+**Where:** `path/file.ts:42` · **Strongest control on the path:** <what was checked>
+**Confirmed only:** severity (critical/high/medium/low) ≤ demonstrated impact; bounded
+  reproduction under the execution contract and what actually happened; fix.
+**needs_validation only:** exact blocker + one safe check (local or owner-observed). No severity.
+**rejected only:** one-line reason. **hardening:** one-line recommendation.
 ```
+
+Use the Cloudflare severity anchors: critical = unauthenticated code execution, full
+data-store access or arbitrary account takeover; high = full defeat of an explicit
+control with real consequences; medium = real violation with limited blast radius;
+low = minor disclosure or effort-heavy minimal gain.
 
 ```typescript
 // Before — vulnerable
@@ -270,7 +297,7 @@ reproduction or overwrite the canonical Cloudflare verdict. See the routing refe
 
 ## Rules of conduct
 
-- **Report only genuine security issues.** Do not pad the report with style nitpicks — noise buries the real finding.
+- **Report only genuine security issues.** A best-practice gap without a demonstrated boundary result is hardening, not a finding. Do not pad the report with style nitpicks — noise buries the real finding.
 - **No secret values, ever.** In reports, logs or commits, write `KEY=<redacted>`. Documenting *where* a secret lives and *how to rotate it* is useful; documenting the value destroys the point.
 - **A key that ever reached a remote is burned.** Removing it from history does not undo exposure — whoever cloned has it. The only real fix is rotation.
 - **No destructive, load-generating or data-mutating production probes in this audit workflow.** Use staging or disposable fixtures for active security validation.

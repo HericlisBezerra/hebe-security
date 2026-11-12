@@ -28,8 +28,8 @@ Every one of these endpoints needs rate limiting. AI assistants almost never add
 
 ### How to reproduce
 
-- Fire N rapid sequential requests (e.g., with `curl` in a loop or a simple script) at the auth or AI endpoint and confirm none are rejected with `429`.
-- Check whether the same request succeeds indefinitely regardless of volume from a single IP or a single authenticated user.
+- First read the code and edge config for a limiter on the route. To confirm behavior, send a small bounded number of requests just above the configured limit to a local or disposable staging instance with the provider mocked, and check for `429`.
+- Never measure this against production or a real paid provider; an unknown edge limit is `needs_validation`, not an absence.
 
 ### Fix
 
@@ -65,7 +65,7 @@ Use one of:
 
 - IP-only limits are defeated by rotating IPs (trivial with VPNs or botnets)
 - User-only limits are defeated by creating new accounts
-- Use both together for effective protection
+- Apply both as independent limits (one counter per IP, one per user); a single key combining IP+user resets whenever either part changes
 
 ### How the attacker exploits it
 
@@ -74,7 +74,8 @@ Use one of:
 
 ### Where to look in the code
 
-- Rate-limiting logic that keys solely on `req.ip` or solely on `userId`, without combining both dimensions.
+- Rate-limiting logic that keys solely on `req.ip` or solely on `userId`, or on a single combined `ip+userId` key, instead of two independent limits.
+- An IP key read from raw `x-forwarded-for` (or the first entry of it) instead of the trusted proxy's header — the client can set any value and get a fresh counter per request.
 
 ### How to reproduce
 
@@ -82,7 +83,7 @@ Use one of:
 
 ### Fix
 
-Key the rate limiter on both IP and user ID together (or apply both limits independently and enforce whichever is hit first), so defeating one dimension alone doesn't bypass protection.
+Apply two independent limits — one keyed by client IP, one keyed by user ID — and reject when either is exceeded. Do not key a single limiter on the `IP+userId` pair: rotating IPs or creating accounts gives a fresh counter each time.
 
 ## Billing Protection
 
@@ -102,7 +103,7 @@ Key the rate limiter on both IP and user ID together (or apply both limits indep
 
 ### How to reproduce
 
-- Attempt a sustained burst of requests against the AI/cloud-backed endpoint and check whether anything (soft warning, hard block, alert) triggers before the request volume becomes expensive.
+- Do not generate paid traffic. Read the per-user quota code and run it locally with a mocked provider and a tiny quota (e.g. 3) to confirm the 4th call is refused; provider caps and alerts are checked by the account owner in the provider console.
 
 ### Fix
 
@@ -124,8 +125,13 @@ const ratelimit = new Ratelimit({
 });
 
 export async function POST(request: Request) {
-  const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
-  const { success } = await ratelimit.limit(ip);
+  // Client IP from the trusted proxy only. Raw `x-forwarded-for` is client-controlled
+  // and spoofable. On Cloudflare (Workers or proxied origin) use CF-Connecting-IP,
+  // and on an origin accept it only from Cloudflare IP ranges. Elsewhere use the
+  // platform's documented client-IP source, never the raw header.
+  const ip = request.headers.get('cf-connecting-ip');
+  if (!ip) return new Response('Bad request', { status: 400 });
+  const { success } = await ratelimit.limit(`ip:${ip}`);
   if (!success) {
     return new Response('Too many requests', { status: 429 });
   }
@@ -162,7 +168,7 @@ Endpoints that need bot protection **on top of** rate limiting:
 
 ### How to reproduce
 
-- Replay the endpoint with `curl` — no browser, no JS execution — and confirm the request succeeds. If a headless request works, there is no bot protection.
+- Against a local or staging instance, replay the endpoint with `curl` — no browser, no JS execution. Success shows the app does not verify a challenge server-side; it does not prove the deployed edge has no bot management. Missing anti-bot is hardening unless a concrete abuse (spend, spam, account farming) is demonstrated.
 - Submit the form with the challenge field removed, or set to an arbitrary string, and confirm it is still accepted.
 - Distribute N requests across N source IPs and confirm no aggregate detection triggers.
 

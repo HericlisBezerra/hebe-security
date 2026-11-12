@@ -55,9 +55,10 @@ Adapt this checklist to the installation and to the risk of the change; do not p
 
 ## CORS
 
-- [ ] `Access-Control-Allow-Origin` is never `*` on an authenticated endpoint
-- [ ] Only exact origins of the installation and approved clients are allowed; no wildcard or reflected `Origin` with credentials
-- [ ] `Access-Control-Allow-Credentials: true` is paired only with specific origins, never a wildcard or reflected `Origin` header
+- [ ] `Access-Control-Allow-Origin: *` only on public, credential-free responses (never on data served without auth that is not meant to be public)
+- [ ] Only exact origins of the installation and approved clients are allowed; no reflected `Origin` or suffix/regex match
+- [ ] `Access-Control-Allow-Credentials: true` is paired only with one specific allowed origin (plus `Vary: Origin`)
+- [ ] Cookie-authenticated state-changing routes have CSRF protection (`SameSite`, token or `Origin` check) independent of CORS
 
 ## Deployment
 
